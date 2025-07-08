@@ -3,3 +3,4 @@ requests
 APScheduler
 python-dotenv
 Pillow
+Flask
