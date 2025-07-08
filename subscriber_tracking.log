@@ -60,3 +60,6 @@
 2025-07-08 19:40:58,502 - bot_logic - INFO - File logging enabled
 2025-07-08 19:40:58,632 - bot_logic - WARNING - OCR not available - pytesseract/tesseract not installed
 2025-07-08 19:40:58,634 - bot_logic - INFO - Requests support available
+2025-07-08 20:20:17,888 - bot_logic - INFO - File logging enabled
+2025-07-08 20:20:18,025 - bot_logic - WARNING - OCR not available - pytesseract/tesseract not installed
+2025-07-08 20:20:18,027 - bot_logic - INFO - Requests support available
