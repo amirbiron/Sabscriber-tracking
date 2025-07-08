@@ -1,0 +1,22 @@
+2025-07-08 05:25:43,760 - __main__ - INFO - 🚀 Starting Subscriber_tracking Bot on Render...
+2025-07-08 05:25:43,760 - __main__ - ERROR - ❌ TELEGRAM_BOT_TOKEN environment variable not set!
+2025-07-08 05:25:43,761 - __main__ - ERROR - Please configure it in your Render service settings.
+2025-07-08 05:28:28,879 - __main__ - INFO - 🚀 Starting Subscriber_tracking Bot on Render...
+2025-07-08 05:28:28,926 - subscriber_tracking_bot - INFO - 🗄️ Database initialized successfully
+2025-07-08 05:28:28,927 - __main__ - ERROR - ❌ Failed to start bot: 'SubscriberTrackingBot' object has no attribute 'my_subscriptions_command'
+2025-07-08 05:34:21,614 - __main__ - INFO - 🚀 Starting Subscriber_tracking Bot on Render...
+2025-07-08 05:34:21,633 - subscriber_tracking_bot - INFO - 🗄️ Database initialized successfully
+2025-07-08 05:34:21,634 - __main__ - INFO - ✅ Bot initialized successfully
+2025-07-08 05:34:21,634 - subscriber_tracking_bot - INFO - 🤖 Subscriber_tracking Bot starting on Render...
+2025-07-08 05:34:21,634 - subscriber_tracking_bot - INFO - 📋 Version: 1.0.0
+2025-07-08 05:34:21,635 - subscriber_tracking_bot - INFO - 📸 OCR Support: ❌ Not Available
+2025-07-08 05:34:21,635 - subscriber_tracking_bot - INFO - 🗄️ Database: /tmp/subscriber_tracking.db
+2025-07-08 05:34:21,635 - subscriber_tracking_bot - INFO - ⏰ Notifications: 09:00
+2025-07-08 05:34:21,635 - subscriber_tracking_bot - INFO - 🌐 Port: 8000
+2025-07-08 05:34:21,635 - apscheduler.scheduler - INFO - Scheduler started
+2025-07-08 05:34:21,635 - subscriber_tracking_bot - INFO - 📅 Scheduler started successfully
+2025-07-08 05:34:21,635 - apscheduler.scheduler - INFO - Added job "Daily Subscription Notifications" to job store "default"
+2025-07-08 05:34:21,636 - subscriber_tracking_bot - INFO - 🔔 Notification job scheduled
+2025-07-08 05:34:21,636 - subscriber_tracking_bot - INFO - 🚀 Subscriber_tracking Bot is ready on Render!
+2025-07-08 05:34:22,242 - subscriber_tracking_bot - ERROR - ❌ Bot crashed: The token `test_token` was rejected by the server.
+2025-07-08 05:34:22,242 - __main__ - ERROR - ❌ Failed to start bot: The token `test_token` was rejected by the server.
