@@ -1603,12 +1603,27 @@ class SubscriberTrackingBot:
         
         logger.info("🚀 Subscriber_tracking Bot is ready on Render!")
         
-        # הפעלת הבוט
-        try:
-            self.app.run_polling(drop_pending_updates=True)
-        except Exception as e:
-            logger.error(f"❌ Bot crashed: {e}")
-            raise
+        # הפעלת הבוט עם הגנה מפני אינסטנסים כפולים
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🚀 Starting bot polling (attempt {attempt + 1}/{max_retries})")
+                self.app.run_polling(
+                    drop_pending_updates=True,
+                    close_loop=False,
+                    stop_signals=None  # מניעת התנגשויות עם Flask
+                )
+                break
+            except Exception as e:
+                if "make sure that only one bot instance is running" in str(e).lower():
+                    logger.warning(f"⚠️ Bot instance conflict detected (attempt {attempt + 1})")
+                    if attempt < max_retries - 1:
+                        logger.info("⏳ Waiting 10 seconds before retry...")
+                        import time
+                        time.sleep(10)
+                        continue
+                logger.error(f"❌ Bot crashed: {e}")
+                raise
 
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית - מותאם לRender"""

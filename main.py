@@ -52,8 +52,13 @@ def run_bot():
             return
 
         try:
-            requests.post(f"https://api.telegram.org/bot{token}/deleteWebhook")
-            logger.info("🔧 Webhook deleted.")
+            # נקה webhook וודא שאין התנגשויות
+            response = requests.post(f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true")
+            logger.info(f"🔧 Webhook deleted: {response.json()}")
+            
+            # המתן קצת לפני הפעלת הבוט
+            import time
+            time.sleep(2)
         except Exception as e:
             logger.warning(f"⚠️ Couldn't delete webhook: {e}")
 
