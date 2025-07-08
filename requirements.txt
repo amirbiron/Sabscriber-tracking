@@ -1,10 +1,5 @@
 python-telegram-bot==20.0
-Flask
 requests
-openai
-newspaper3k
-bs4
 APScheduler
-pytesseract
-Pillow
 python-dotenv
+Pillow

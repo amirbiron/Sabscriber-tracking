@@ -27,11 +27,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# עכשיו ניתן להוסיף file handler אם אפשר
+# עכשיו ניתן להוסיף file handler אם אפשר (רק בסביבה מקומית)
 try:
-    file_handler = logging.FileHandler('subscriber_tracking.log', encoding='utf-8')
-    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(file_handler)
+    if not os.getenv('RENDER'):  # לא ברנדר
+        file_handler = logging.FileHandler('subscriber_tracking.log', encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        logger.info("File logging enabled")
+    else:
+        logger.info("Running on Render - console logging only")
 except Exception:
     logger.warning("Could not create log file - using console only")
 
@@ -47,11 +51,13 @@ from apscheduler.triggers.cron import CronTrigger
 try:
     import pytesseract
     from PIL import Image
+    # Test if tesseract is actually available
+    pytesseract.get_tesseract_version()
     OCR_AVAILABLE = True
     logger.info("OCR support available")
-except ImportError:
+except (ImportError, Exception):
     OCR_AVAILABLE = False
-    logger.warning("OCR not available - install pytesseract and Pillow for image recognition")
+    logger.warning("OCR not available - pytesseract/tesseract not installed")
 
 try:
     import requests
