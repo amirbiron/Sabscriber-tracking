@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
+async def main():
     """הפעלת Subscriber_tracking Bot"""
     logger.info("🚀 Starting Subscriber_tracking Bot...")
     
@@ -58,5 +58,7 @@ def main():
         logger.error(f"❌ Unexpected error: {e}")
         raise
 
+self.scheduler.start(paused=False)
+
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
