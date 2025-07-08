@@ -81,6 +81,26 @@ if self.token in ['test_token', 'YOUR_BOT_TOKEN_HERE', 'your_bot_token_here']:
 
 ## ❗ אם עדיין לא עובד
 
+### 🚨 שגיאת "terminated by other getUpdates request":
+
+אם אתה רואה:
+```
+terminated by other getUpdates request; make sure that only one bot instance is running
+```
+
+**זה אומר שיש מספר instances של הבוט רצים!**
+
+**פתרון מהיר:**
+1. **Render Dashboard** → השירות שלך
+2. **Settings** → "Suspend Service" 
+3. **חכה 30 שניות**
+4. **"Resume Service"**
+
+**אם זה לא עוזר:**
+1. **Logs** → חפש "🔒 Bot instance lock acquired (PID: XXXX)"
+2. אם אתה רואה כמה PIDs שונים - יש instances כפולים
+3. **Suspend** ו-**Resume** שוב
+
 ### בעיות נפוצות ופתרונות:
 
 1. **"Unauthorized" או "Token rejected"**
@@ -91,9 +111,22 @@ if self.token in ['test_token', 'YOUR_BOT_TOKEN_HERE', 'your_bot_token_here']:
    - ✅ ודא שהבוט פעיל ב-BotFather (`/mybots`)
    - ✅ נסה ליצור בוט חדש
 
-3. **עדיין רואה "test_token" בלוגים**
+3. **"can't use getUpdates method while webhook is active"**
+   - ✅ הבוט ינקה אוטומטית את הwebhook
+   - ✅ חכה 2-3 דקות אחרי deploy
+   - ✅ אם נמשך - עשה Suspend/Resume
+
+4. **עדיין רואה "test_token" בלוגים**
    - ✅ נקה את הקאש ב-Render
    - ✅ עשה deploy מחדש
+
+### 🛠️ פתרון מתקדם (אם כלום לא עוזר):
+
+1. **Render Dashboard** → השירות שלך
+2. **Settings** → **"Delete Service"** ⚠️
+3. **צור שירות חדש** מאותו repository
+4. **הגדר שוב** את `TELEGRAM_BOT_TOKEN`
+5. **Deploy**
 
 ### קבלת עזרה:
 
@@ -101,6 +134,7 @@ if self.token in ['test_token', 'YOUR_BOT_TOKEN_HERE', 'your_bot_token_here']:
 - 📋 **Render Logs** - יש הודעות שגיאה?
 - 🔍 **Environment Variables** - הטוקן מוגדר נכון?
 - 📱 **BotFather** - הבוט פעיל?
+- 🤖 **המשתמש בטלגרם** - נסה לשלוח `/start` לבוט
 
 ## 🎯 סיכום
 
