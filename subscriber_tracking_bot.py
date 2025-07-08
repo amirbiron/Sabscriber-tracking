@@ -49,17 +49,6 @@ class Config:
     # Bot settings - Environment variables from Render
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
-    # Validate token early
-    if not TELEGRAM_BOT_TOKEN:
-        import sys
-        print("❌ ERROR: TELEGRAM_BOT_TOKEN environment variable is required!")
-        print("📋 Please set your bot token in Render environment variables:")
-        print("   1. Go to your Render service dashboard")
-        print("   2. Navigate to Environment tab") 
-        print("   3. Add: TELEGRAM_BOT_TOKEN=your_actual_bot_token")
-        print("   4. Get your token from @BotFather on Telegram")
-        sys.exit(1)
-    
     # Database settings
     DATABASE_PATH = os.getenv('DATABASE_PATH', '/tmp/subscriber_tracking.db')
     
@@ -103,14 +92,27 @@ class SubscriberTrackingBot:
     def __init__(self, token: str = None):
         self.token = token or Config.TELEGRAM_BOT_TOKEN
         
-        # Validate token
+        # Comprehensive token validation
         if not self.token:
+            logger.error("❌ TELEGRAM_BOT_TOKEN environment variable is not set!")
+            logger.error("📋 To fix this issue:")
+            logger.error("   1. Go to Render Dashboard")
+            logger.error("   2. Navigate to Environment tab")
+            logger.error("   3. Add: TELEGRAM_BOT_TOKEN=your_actual_bot_token")
+            logger.error("   4. Get your token from @BotFather on Telegram")
+            logger.error("   5. Redeploy your service")
             raise ValueError("❌ TELEGRAM_BOT_TOKEN is required but not provided!")
             
         # Additional validation to prevent test tokens
         if self.token in ['test_token', 'YOUR_BOT_TOKEN_HERE', 'your_bot_token_here']:
+            logger.error(f"❌ Invalid token detected: '{self.token}'")
+            logger.error("📋 Please use a real bot token from @BotFather!")
+            logger.error("   1. Open Telegram and search @BotFather")
+            logger.error("   2. Send /newbot or /token")
+            logger.error("   3. Copy the token to Render environment variables")
             raise ValueError(f"❌ Invalid token detected: '{self.token}'. Please use a real bot token from @BotFather!")
             
+        logger.info(f"🔑 Using token: {self.token[:10]}...{self.token[-4:] if len(self.token) > 14 else '***'}")
         self.app = Application.builder().token(self.token).build()
         self.scheduler = AsyncIOScheduler()
         self.bot_info = {
