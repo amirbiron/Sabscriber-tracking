@@ -20,3 +20,5 @@
 2025-07-08 05:34:21,636 - subscriber_tracking_bot - INFO - 🚀 Subscriber_tracking Bot is ready on Render!
 2025-07-08 05:34:22,242 - subscriber_tracking_bot - ERROR - ❌ Bot crashed: The token `test_token` was rejected by the server.
 2025-07-08 05:34:22,242 - __main__ - ERROR - ❌ Failed to start bot: The token `test_token` was rejected by the server.
+2025-07-08 17:54:40,799 - __main__ - INFO - 🚀 Starting ReadLater Bot...
+2025-07-08 17:54:40,799 - __main__ - ERROR - ❌ TELEGRAM_BOT_TOKEN not found!

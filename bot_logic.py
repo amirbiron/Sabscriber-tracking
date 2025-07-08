@@ -27,6 +27,13 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# הגדרת logger לפני שימוש
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Optional imports for advanced features
 try:
     import pytesseract
@@ -43,21 +50,6 @@ try:
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
-import logging
-import logging
-
-# הגדרת logger
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-# הגדרת logger גלובלי
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
@@ -85,7 +77,8 @@ class Config:
         'Zoom Pro', 'Slack', 'Notion', 'Figma', 'Canva Pro'
     ]
 
-# הגדרת logging מתקדם לRender
+# הגדרת logging מתקדם לRender - מתווסף לקונפיגורציה הקיימת
+logging.getLogger().handlers.clear()
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -94,7 +87,6 @@ logging.basicConfig(
         logging.FileHandler('subscriber_tracking.log', encoding='utf-8')  # File logging
     ]
 )
-logger = logging.getLogger(__name__)
 
 # Conversation states
 ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
@@ -1682,20 +1674,12 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+def get_telegram_app():
+    """יצירת אפליקציית הטלגרם"""
+    bot = SubscriberTrackingBot()
+    return bot.app
+
 if __name__ == "__main__":
     print("🎯 Starting Subscriber_tracking Bot...")
     bot = SubscriberTrackingBot()
     bot.run()
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-
-def get_telegram_app():
-    """יצירת אפליקציית הטלגרם"""
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("saved", saved_articles))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyboard_buttons))
-    application.add_handler(CallbackQueryHandler(button_callback))
-
-    return application
