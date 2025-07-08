@@ -1795,9 +1795,14 @@ class SubscriberTrackingBot:
 
     def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
+        # Force single instance by using a more aggressive approach
+        deployment_id = os.getenv('RENDER_SERVICE_ID', 'local') + "_" + str(int(datetime.now().timestamp()))
+        logger.info(f"🆔 Deployment ID: {deployment_id}")
+        
         # Check for single instance first
         if not SingletonBot.ensure_single_instance():
             logger.error("❌ Bot instance already running. Exiting to prevent conflicts.")
+            logger.error("🔄 Try restarting the Render service to clear all instances.")
             return
         
         logger.info("🤖 Subscriber_tracking Bot starting on Render...")

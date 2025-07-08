@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: subscriber-tracking-bot
+    name: subscriber-tracking-bot-v2
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
@@ -18,4 +18,6 @@ services:
         value: 9
       - key: NOTIFICATION_MINUTE
         value: 0
+      - key: PORT
+        value: 8001
     # Note: TELEGRAM_BOT_TOKEN must be set manually in Render dashboard for security
