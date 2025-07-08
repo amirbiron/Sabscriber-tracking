@@ -47,3 +47,5 @@
 2025-07-08 18:08:29,474 - __main__ - ERROR -    3. Go to Environment tab
 2025-07-08 18:08:29,474 - __main__ - ERROR -    4. Add: TELEGRAM_BOT_TOKEN = your_bot_token_here
 2025-07-08 18:08:29,474 - __main__ - ERROR -    5. Redeploy the service
+2025-07-08 18:13:28,232 - bot_logic - WARNING - OCR not available - install pytesseract and Pillow for image recognition
+2025-07-08 18:13:28,265 - bot_logic - WARNING - Requests not available - some features may be limited

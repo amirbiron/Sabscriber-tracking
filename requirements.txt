@@ -5,3 +5,6 @@ openai
 newspaper3k
 bs4
 APScheduler
+pytesseract
+Pillow
+python-dotenv

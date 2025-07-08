@@ -19,6 +19,22 @@ from typing import Optional, List, Dict, Tuple
 import io
 from pathlib import Path
 
+# הגדרת logging בתחילת הקובץ - לפני כל השאר
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# עכשיו ניתן להוסיף file handler אם אפשר
+try:
+    file_handler = logging.FileHandler('subscriber_tracking.log', encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+except Exception:
+    logger.warning("Could not create log file - using console only")
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
@@ -27,31 +43,12 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# הגדרת logging מתקדם לRender - עם error handling
-try:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),  # Console output for Render logs
-            logging.FileHandler('subscriber_tracking.log', encoding='utf-8')  # File logging
-        ]
-    )
-except Exception:
-    # אם לא ניתן ליצור קובץ לוג, נשתמש רק בקונסול
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler()]
-    )
-
-logger = logging.getLogger(__name__)
-
 # Optional imports for advanced features
 try:
     import pytesseract
     from PIL import Image
     OCR_AVAILABLE = True
+    logger.info("OCR support available")
 except ImportError:
     OCR_AVAILABLE = False
     logger.warning("OCR not available - install pytesseract and Pillow for image recognition")
@@ -61,6 +58,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
     REQUESTS_AVAILABLE = True
+    logger.info("Requests support available")
 except ImportError:
     REQUESTS_AVAILABLE = False
     logger.warning("Requests not available - some features may be limited")
