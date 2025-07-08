@@ -14,6 +14,7 @@ import sqlite3
 import asyncio
 import re
 import os
+import sys
 import atexit
 from datetime import datetime, timedelta
 
@@ -104,11 +105,54 @@ class SingletonBot:
     def ensure_single_instance(cls):
         """וידוא שיש רק instance אחד של הבוט"""
         if not HAS_FCNTL:
-            logger.warning("⚠️ File locking not available - skipping single instance check")
-            return True
+            logger.warning("⚠️ File locking not available - using simple file check")
+            return cls._simple_lock_check()
             
         lock_path = "/tmp/subscriber_tracking_bot.lock"
         try:
+            # First check if there's an existing lock with dead process
+            if os.path.exists(lock_path):
+                try:
+                    with open(lock_path, 'r') as f:
+                        old_pid = int(f.read().strip())
+                    
+                    # Check if process is still running
+                    try:
+                        os.kill(old_pid, 0)  # Signal 0 just checks if process exists
+                        
+                        # Process is running - try to determine if it's stale
+                        current_time = datetime.now()
+                        lock_age = current_time.timestamp() - os.path.getmtime(lock_path)
+                        
+                        if lock_age > 300:  # Lock older than 5 minutes
+                            logger.warning(f"🕐 Lock file is {lock_age:.0f} seconds old - may be stale")
+                            logger.warning(f"🔫 Attempting to terminate old process (PID: {old_pid})")
+                            try:
+                                os.kill(old_pid, 15)  # SIGTERM
+                                import time
+                                time.sleep(3)
+                                os.kill(old_pid, 0)  # Check if still alive
+                                logger.error(f"❌ Old process {old_pid} is still running after SIGTERM")
+                            except OSError:
+                                logger.info(f"✅ Old process {old_pid} terminated successfully")
+                                os.unlink(lock_path)
+                        else:
+                            logger.error(f"❌ Another bot instance is running (PID: {old_pid})")
+                            logger.error(f"Lock file: {lock_path} (age: {lock_age:.0f}s)")
+                            return False
+                    except OSError:
+                        # Process is dead, remove stale lock
+                        logger.warning(f"🧹 Removing stale lock file (dead PID: {old_pid})")
+                        os.unlink(lock_path)
+                except (ValueError, FileNotFoundError):
+                    # Invalid lock file, remove it
+                    logger.warning("🧹 Removing invalid lock file")
+                    try:
+                        os.unlink(lock_path)
+                    except OSError:
+                        pass
+            
+            # Try to acquire lock
             cls._lock_file = open(lock_path, 'w')
             fcntl.flock(cls._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             
@@ -129,6 +173,52 @@ class SingletonBot:
             logger.error(f"Lock file: {lock_path}")
             logger.error(f"Error: {e}")
             return False
+    
+    @classmethod 
+    def _simple_lock_check(cls):
+        """Simple lock check when fcntl is not available"""
+        lock_path = "/tmp/subscriber_tracking_bot.pid"
+        current_pid = os.getpid()
+        
+        try:
+            if os.path.exists(lock_path):
+                with open(lock_path, 'r') as f:
+                    old_pid = int(f.read().strip())
+                
+                # Check if it's the same PID (restart scenario)
+                if old_pid == current_pid:
+                    logger.info(f"✅ Same PID lock file found ({current_pid})")
+                    return True
+                
+                # Check if process is still running
+                try:
+                    os.kill(old_pid, 0)
+                    logger.error(f"❌ Another instance running (PID: {old_pid}, current: {current_pid})")
+                    return False
+                except OSError:
+                    logger.warning(f"🧹 Removing stale PID file (dead PID: {old_pid})")
+            
+            # Write our PID
+            with open(lock_path, 'w') as f:
+                f.write(str(current_pid))
+            
+            atexit.register(lambda: cls._cleanup_simple_lock(lock_path))
+            logger.info(f"🔒 Simple lock acquired (PID: {current_pid})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Lock check failed: {e}")
+            return False
+    
+    @classmethod
+    def _cleanup_simple_lock(cls, lock_path):
+        """Cleanup simple lock file"""
+        try:
+            if os.path.exists(lock_path):
+                os.unlink(lock_path)
+                logger.info("🔓 Simple lock released")
+        except:
+            pass
     
     @classmethod
     def cleanup_lock(cls):
@@ -1739,8 +1829,28 @@ class SubscriberTrackingBot:
             import asyncio
             asyncio.get_event_loop().run_until_complete(self.clear_webhook_if_exists())
             
+            # Add a small delay to avoid race conditions with multiple instances
+            logger.info("⏱️ Waiting 3 seconds before starting polling to avoid race conditions...")
+            import time
+            time.sleep(3)
+            
+            # Final check for conflicts
             logger.info("🔄 Starting polling mode...")
-            self.app.run_polling(drop_pending_updates=True)
+            logger.info(f"📊 Process info - PID: {os.getpid()}, Command: {' '.join(sys.argv)}")
+            
+            # Use error handling to catch conflicts early
+            try:
+                self.app.run_polling(drop_pending_updates=True, pool_timeout=10)
+            except telegram.error.Conflict as conflict_error:
+                logger.error(f"🚨 CONFLICT DETECTED: {conflict_error}")
+                logger.error("🔍 This means another bot instance is running!")
+                logger.error("💡 Possible causes:")
+                logger.error("   1. Multiple Render instances running")
+                logger.error("   2. Previous instance didn't shut down cleanly")
+                logger.error("   3. Manual bot process running elsewhere")
+                logger.error("🛠️ Try suspending and resuming the Render service")
+                raise
+                
         except Exception as e:
             logger.error(f"❌ Bot crashed: {e}")
             raise
