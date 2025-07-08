@@ -14,7 +14,15 @@ import sqlite3
 import asyncio
 import re
 import os
+import atexit
 from datetime import datetime, timedelta
+
+# Try to import fcntl for file locking (Unix/Linux only)
+try:
+    import fcntl
+    HAS_FCNTL = True
+except ImportError:
+    HAS_FCNTL = False
 from typing import Optional, List, Dict, Tuple
 import io
 from pathlib import Path
@@ -85,6 +93,53 @@ logger = logging.getLogger(__name__)
 # Conversation states
 ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
 EDIT_CHOICE, EDIT_VALUE = range(2)
+
+class SingletonBot:
+    """מונע הפעלה כפולה של הבוט"""
+    _instance = None
+    _lock_file = None
+    
+    @classmethod
+    def ensure_single_instance(cls):
+        """וידוא שיש רק instance אחד של הבוט"""
+        if not HAS_FCNTL:
+            logger.warning("⚠️ File locking not available - skipping single instance check")
+            return True
+            
+        lock_path = "/tmp/subscriber_tracking_bot.lock"
+        try:
+            cls._lock_file = open(lock_path, 'w')
+            fcntl.flock(cls._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            
+            # Write PID to lock file
+            cls._lock_file.write(str(os.getpid()))
+            cls._lock_file.flush()
+            
+            # Cleanup on exit
+            atexit.register(cls.cleanup_lock)
+            
+            logger.info(f"🔒 Bot instance lock acquired (PID: {os.getpid()})")
+            return True
+            
+        except (IOError, OSError) as e:
+            if cls._lock_file:
+                cls._lock_file.close()
+            logger.error(f"❌ Another bot instance is already running!")
+            logger.error(f"Lock file: {lock_path}")
+            logger.error(f"Error: {e}")
+            return False
+    
+    @classmethod
+    def cleanup_lock(cls):
+        """ניקוי lock file בסיום"""
+        if cls._lock_file and HAS_FCNTL:
+            try:
+                fcntl.flock(cls._lock_file.fileno(), fcntl.LOCK_UN)
+                cls._lock_file.close()
+                os.unlink("/tmp/subscriber_tracking_bot.lock")
+                logger.info("🔓 Bot instance lock released")
+            except:
+                pass
 
 class SubscriberTrackingBot:
     """🤖 Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
@@ -1574,8 +1629,30 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
+    async def clear_webhook_if_exists(self):
+        """ניקוי webhook כדי למנוע conflicts עם polling"""
+        try:
+            logger.info("🔍 Checking for existing webhook...")
+            webhook_info = await self.app.bot.get_webhook_info()
+            
+            if webhook_info.url:
+                logger.warning(f"⚠️ Found active webhook: {webhook_info.url}")
+                logger.info("🧹 Clearing webhook to enable polling...")
+                await self.app.bot.delete_webhook()
+                logger.info("✅ Webhook cleared successfully")
+            else:
+                logger.info("✅ No webhook found - ready for polling")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Could not check/clear webhook: {e}")
+
     def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
+        # Check for single instance first
+        if not SingletonBot.ensure_single_instance():
+            logger.error("❌ Bot instance already running. Exiting to prevent conflicts.")
+            return
+        
         logger.info("🤖 Subscriber_tracking Bot starting on Render...")
         logger.info(f"📋 Version: {self.bot_info['version']}")
         logger.info(f"📸 OCR Support: {'✅ Available' if OCR_AVAILABLE and Config.ENABLE_OCR else '❌ Not Available'}")
@@ -1601,10 +1678,18 @@ class SubscriberTrackingBot:
         
         # הפעלת הבוט
         try:
+            # Clear webhook before starting polling to prevent conflicts
+            import asyncio
+            asyncio.get_event_loop().run_until_complete(self.clear_webhook_if_exists())
+            
+            logger.info("🔄 Starting polling mode...")
             self.app.run_polling(drop_pending_updates=True)
         except Exception as e:
             logger.error(f"❌ Bot crashed: {e}")
             raise
+        finally:
+            # Cleanup on exit
+            SingletonBot.cleanup_lock()
 
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית - מותאם לRender"""
@@ -1686,7 +1771,8 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+# Note: Bot is started via main.py for Render deployment
+# Removed direct execution to prevent conflicts
 if __name__ == "__main__":
-    print("🎯 Starting Subscriber_tracking Bot...")
-    bot = SubscriberTrackingBot()
-    bot.run()
+    print("🎯 For deployment, use: python main.py")
+    print("This prevents multiple bot instances conflict")
