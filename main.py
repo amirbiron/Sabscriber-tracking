@@ -6,7 +6,7 @@
 import os
 import logging
 import requests
-from bot_logic import get_telegram_app
+from bot_logic_simplified import get_telegram_app
 
 # לוגים
 logging.basicConfig(
