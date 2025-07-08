@@ -6,7 +6,6 @@
 import os
 import logging
 import requests
-cursor/fix-undefined-logger-in-deployment-logs-067e
 from bot_logic import SubscriberTrackingBot
 from bot_logic_simplified import get_telegram_app
 main
