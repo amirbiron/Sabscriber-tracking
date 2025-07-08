@@ -4,3 +4,4 @@ APScheduler
 python-dotenv
 Pillow
 pytesseract
+apscheduler
