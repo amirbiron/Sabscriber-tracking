@@ -69,6 +69,15 @@ class Config:
     # Port for Render (if needed for web service)
     PORT = int(os.getenv('PORT', 8000))
     
+    @classmethod
+    def validate_token(cls):
+        """בדיקת תקינות הטוקן"""
+        if not cls.TELEGRAM_BOT_TOKEN:
+            raise ValueError("❌ TELEGRAM_BOT_TOKEN environment variable not set! Please configure it in Render.")
+        if cls.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+            raise ValueError("❌ TELEGRAM_BOT_TOKEN contains placeholder value! Please set your actual bot token.")
+        return cls.TELEGRAM_BOT_TOKEN
+    
     # Common services
     COMMON_SERVICES = [
         'Netflix', 'Spotify', 'ChatGPT Plus', 'YouTube Premium',
@@ -96,16 +105,20 @@ class SubscriberTrackingBot:
     """🤖 Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
     
     def __init__(self, token: str = None):
-        self.token = token or Config.TELEGRAM_BOT_TOKEN
-        self.app = Application.builder().token(self.token).build()
-        self.scheduler = AsyncIOScheduler()
-        self.bot_info = {
-            'name': 'Subscriber_tracking',
-            'version': '1.0.0',
-            'description': 'בוט ניהול מנויים אישי חכם'
-        }
-        self.init_database()
-        self.setup_handlers()
+        try:
+            self.token = token or Config.validate_token()
+            self.app = Application.builder().token(self.token).build()
+            self.scheduler = AsyncIOScheduler()
+            self.bot_info = {
+                'name': 'Subscriber_tracking',
+                'version': '1.0.0',
+                'description': 'בוט ניהול מנויים אישי חכם'
+            }
+            self.init_database()
+            self.setup_handlers()
+        except ValueError as e:
+            logger.error(f"Configuration error: {e}")
+            raise
 
     def init_database(self):
         """אתחול מסד הנתונים של Subscriber_tracking"""
@@ -1566,11 +1579,7 @@ class SubscriberTrackingBot:
         logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
         logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
         logger.info(f"🌐 Port: {Config.PORT}")
-        
-        # וידוא שיש טוקן
-        if Config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-            logger.error("❌ TELEGRAM_BOT_TOKEN not set! Please configure environment variables in Render.")
-            return
+        logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
         
         # הפעלת scheduler
         self.scheduler.start()
@@ -1676,8 +1685,12 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 def get_telegram_app():
     """יצירת אפליקציית הטלגרם"""
-    bot = SubscriberTrackingBot()
-    return bot.app
+    try:
+        bot = SubscriberTrackingBot()
+        return bot.app
+    except ValueError as e:
+        logger.error(f"Failed to create Telegram app: {e}")
+        raise
 
 if __name__ == "__main__":
     print("🎯 Starting Subscriber_tracking Bot...")
