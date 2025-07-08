@@ -8,7 +8,7 @@ import logging
 import requests
 from bot_logic import SubscriberTrackingBot
 from bot_logic_simplified import get_telegram_app
-main
+
 
 # לוגים
 logging.basicConfig(
