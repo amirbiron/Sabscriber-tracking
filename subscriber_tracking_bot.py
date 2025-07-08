@@ -27,6 +27,7 @@ from typing import Optional, List, Dict, Tuple
 import io
 from pathlib import Path
 
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
@@ -286,8 +287,30 @@ class SubscriberTrackingBot:
         conn.close()
         logger.info("🗄️ Database initialized successfully")
 
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        """Global error handler"""
+        logger.error(f"Exception while handling an update: {context.error}")
+        
+        # Log the update that caused the error
+        if update:
+            logger.error(f"Update that caused error: {update}")
+            
+        # Handle specific errors
+        if isinstance(context.error, telegram.error.BadRequest):
+            if "can't parse entities" in str(context.error):
+                logger.warning("Parse entities error - probably markdown formatting issue")
+            elif "message is not modified" in str(context.error):
+                logger.debug("Message not modified - this is usually fine")
+        elif isinstance(context.error, telegram.error.Conflict):
+            logger.error("Conflict error - this indicates webhook/polling conflicts")
+        elif isinstance(context.error, telegram.error.RetryAfter):
+            logger.warning(f"Rate limited - retry after {context.error.retry_after} seconds")
+
     def setup_handlers(self):
         """הגדרת handlers של Subscriber_tracking"""
+        # Add error handler first
+        self.app.add_error_handler(self.error_handler)
+        
         # Command handlers
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
@@ -1631,20 +1654,54 @@ class SubscriberTrackingBot:
 
     async def clear_webhook_if_exists(self):
         """ניקוי webhook כדי למנוע conflicts עם polling"""
-        try:
-            logger.info("🔍 Checking for existing webhook...")
-            webhook_info = await self.app.bot.get_webhook_info()
-            
-            if webhook_info.url:
-                logger.warning(f"⚠️ Found active webhook: {webhook_info.url}")
-                logger.info("🧹 Clearing webhook to enable polling...")
-                await self.app.bot.delete_webhook()
-                logger.info("✅ Webhook cleared successfully")
-            else:
-                logger.info("✅ No webhook found - ready for polling")
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                logger.info(f"🔍 Checking for existing webhook (attempt {retry_count + 1}/{max_retries})...")
+                webhook_info = await self.app.bot.get_webhook_info()
                 
-        except Exception as e:
-            logger.warning(f"⚠️ Could not check/clear webhook: {e}")
+                if webhook_info.url:
+                    logger.warning(f"⚠️ Found active webhook: {webhook_info.url}")
+                    logger.warning(f"Pending updates: {webhook_info.pending_update_count}")
+                    if webhook_info.last_error_message:
+                        logger.warning(f"Last error: {webhook_info.last_error_message}")
+                    
+                    logger.info("🧹 Clearing webhook to enable polling...")
+                    # Force delete with drop_pending_updates=True
+                    await self.app.bot.delete_webhook(drop_pending_updates=True)
+                    
+                    # Wait a moment and verify
+                    await asyncio.sleep(2)
+                    verify_info = await self.app.bot.get_webhook_info()
+                    
+                    if verify_info.url:
+                        logger.error(f"❌ Webhook still active after deletion: {verify_info.url}")
+                        retry_count += 1
+                        if retry_count < max_retries:
+                            logger.info(f"🔄 Retrying webhook deletion in 3 seconds...")
+                            await asyncio.sleep(3)
+                            continue
+                        else:
+                            logger.error("❌ Failed to clear webhook after multiple attempts!")
+                            raise Exception("Could not clear webhook - bot may conflict with existing webhook")
+                    else:
+                        logger.info("✅ Webhook cleared and verified successfully")
+                        return
+                else:
+                    logger.info("✅ No webhook found - ready for polling")
+                    return
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Error during webhook check/clear: {e}")
+                retry_count += 1
+                if retry_count < max_retries:
+                    logger.info(f"🔄 Retrying in 3 seconds...")
+                    await asyncio.sleep(3)
+                else:
+                    logger.error("❌ Failed to clear webhook after all retries!")
+                    raise
 
     def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""

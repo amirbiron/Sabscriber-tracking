@@ -19,10 +19,30 @@ logger = logging.getLogger(__name__)
 
 # שרת HTTP מדומה כדי ש-Render יזהה פורט פתוח
 class DummyHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Suppress default logging to reduce noise
+        pass
+        
     def do_GET(self):
         self.send_response(200)
+        self.send_header('Content-type', 'text/html')
         self.end_headers()
         self.wfile.write("✅ Subscriber_tracking Bot is running".encode("utf-8"))
+    
+    def do_POST(self):
+        # Handle webhook POSTs gracefully (they should be going to the bot, not here)
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length)
+        
+        # Log webhook attempts (these should stop once webhook is cleared)
+        logger.warning(f"⚠️ Received webhook POST (webhook should be cleared soon)")
+        logger.debug(f"POST data length: {content_length} bytes")
+        
+        # Return OK to avoid errors in Telegram logs
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(b'{"ok":true,"description":"Webhook being cleared, switch to polling mode"}')
 
 def run_dummy_server():
     port = Config.PORT
