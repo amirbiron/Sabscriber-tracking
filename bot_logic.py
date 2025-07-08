@@ -61,7 +61,7 @@ logging.basicConfig(
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
-    TELEGRAM_BOT_TOKEN = os.getenv('8127449182:AAFoFtUNTJPCyEHK1Y0DCDyTrkYM8SMMW8U')
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
     # Database settings
     DATABASE_PATH = os.getenv('DATABASE_PATH', '/tmp/subscriber_tracking.db')
