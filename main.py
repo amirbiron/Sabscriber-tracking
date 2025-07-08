@@ -23,7 +23,7 @@ def main():
     
     # וידוא שיש טוקן
     token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if not token or token == '8127449182:AAFPRm1Vg9IC7NOD-x21VO5AZuYtoKTKWXU':
+    if not token:
         logger.error("❌ TELEGRAM_BOT_TOKEN environment variable not set!")
         logger.error("Please configure it in your Render service settings.")
         return

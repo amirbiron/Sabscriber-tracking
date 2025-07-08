@@ -13,6 +13,6 @@ requests==2.31.0
 
 # OCR Support (זיהוי טקסט מתמונות) - Optional
 pytesseract==0.3.10
-Pillow==10.1.0
+Pillow>=11.0.0
 
 # Note: sqlite3 is built into Python, no need to install

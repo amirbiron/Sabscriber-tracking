@@ -47,18 +47,18 @@ except ImportError:
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
-    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8127449182:AAFPRm1Vg9IC7NOD-x21VO5AZuYtoKTKWXU')
+    TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
     # Database settings
-    DATABASE_PATH = os.getenv('DATABASE_PATH', 'subscriber_tracking.db')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', '/tmp/subscriber_tracking.db')
     
     # Notification settings
     NOTIFICATION_HOUR = int(os.getenv('NOTIFICATION_HOUR', 9))
     NOTIFICATION_MINUTE = int(os.getenv('NOTIFICATION_MINUTE', 0))
     
     # Feature flags
-    ENABLE_OCR = os.getenv('ENABLE_OCR', 'False').lower() == 'true'
-    ENABLE_ANALYTICS = os.getenv('ENABLE_ANALYTICS', 'True').lower() == 'true'
+    ENABLE_OCR = os.getenv('ENABLE_OCR', 'false').lower() == 'true'
+    ENABLE_ANALYTICS = os.getenv('ENABLE_ANALYTICS', 'true').lower() == 'true'
     
     # Port for Render (if needed for web service)
     PORT = int(os.getenv('PORT', 8000))
@@ -778,6 +778,776 @@ class SubscriberTrackingBot:
         
         # שמירת הנתונים לשימוש מאוחר יותר
         context.user_data['ocr_data'] = parsed_data
+
+    async def my_subscriptions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הצגת כל המנויים של המשתמש"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_subscriptions")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT id, service_name, amount, currency, billing_day, category, notes, created_at
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1
+            ORDER BY billing_day ASC
+        ''', (user_id,))
+        
+        subscriptions = cursor.fetchall()
+        conn.close()
+        
+        if not subscriptions:
+            await update.message.reply_text(
+                "📭 **אין לך מנויים רשומים עדיין**\n\n"
+                "🚀 **התחל עכשיו:**\n"
+                "/add_subscription - הוסף מנוי ראשון\n"
+                "או שלח צילום מסך של חיוב לזיהוי אוטומטי! 📸"
+            )
+            return
+        
+        # חישוב סטטיסטיקות בסיסיות
+        total_monthly = sum(sub[2] for sub in subscriptions)  # amount
+        total_yearly = total_monthly * 12
+        
+        header_text = f"""
+📱 **המנויים שלך ({len(subscriptions)} פעילים)**
+
+💰 **סיכום הוצאות:**
+• חודשי: ₪{total_monthly:.2f}
+• שנתי: ₪{total_yearly:.2f}
+
+📋 **רשימת מנויים:**
+        """
+        
+        # בניית רשימת המנויים
+        subscriptions_text = ""
+        for i, (sub_id, service, amount, currency, billing_day, category, notes, created_at) in enumerate(subscriptions, 1):
+            category_emoji = self.get_category_emoji(category)
+            subscriptions_text += f"\n{i}. {category_emoji} **{service}**\n"
+            subscriptions_text += f"   💰 {amount} {currency} • 📅 {billing_day} בחודש\n"
+            subscriptions_text += f"   /edit_{sub_id} • /delete_{sub_id}\n"
+        
+        full_text = header_text + subscriptions_text
+        
+        # הוספת כפתורי פעולה
+        keyboard = [
+            [InlineKeyboardButton("➕ הוסף מנוי", callback_data="quick_add")],
+            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats"), 
+             InlineKeyboardButton("📈 ניתוח", callback_data="analytics")],
+            [InlineKeyboardButton("📅 תשלומים קרובים", callback_data="upcoming"),
+             InlineKeyboardButton("⚙️ הגדרות", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(full_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    def get_category_emoji(self, category):
+        """החזרת אמוג'י לפי קטגוריה"""
+        emoji_map = {
+            'streaming': '📺',
+            'music': '🎵',
+            'productivity': '⚡',
+            'cloud': '☁️',
+            'software': '💻',
+            'gaming': '🎮',
+            'news': '📰',
+            'fitness': '💪',
+            'education': '📚',
+            'communication': '💬',
+            'financial': '💳',
+            'other': '📦'
+        }
+        return emoji_map.get(category, '📦')
+
+    async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הצגת סטטיסטיקות מנויים"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_stats")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # סטטיסטיקות בסיסיות
+        cursor.execute('SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND is_active = 1', (user_id,))
+        total_subs = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT SUM(amount) FROM subscriptions WHERE user_id = ? AND is_active = 1', (user_id,))
+        monthly_total = cursor.fetchone()[0] or 0
+        
+        # סטטיסטיקות לפי קטגוריה
+        cursor.execute('''
+            SELECT category, COUNT(*), SUM(amount) 
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1 
+            GROUP BY category 
+            ORDER BY SUM(amount) DESC
+        ''', (user_id,))
+        categories = cursor.fetchall()
+        
+        # סטטיסטיקות לפי מטבע
+        cursor.execute('''
+            SELECT currency, COUNT(*), SUM(amount) 
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1 
+            GROUP BY currency
+        ''', (user_id,))
+        currencies = cursor.fetchall()
+        
+        conn.close()
+        
+        if total_subs == 0:
+            await update.message.reply_text("📊 אין נתונים להצגה. הוסף מנויים תחילה!")
+            return
+        
+        yearly_total = monthly_total * 12
+        average_sub = monthly_total / total_subs if total_subs > 0 else 0
+        
+        stats_text = f"""
+📊 **סטטיסטיקות המנויים שלך**
+
+📈 **סיכום כספי:**
+• מנויים פעילים: {total_subs}
+• הוצאה חודשית: ₪{monthly_total:.2f}
+• הוצאה שנתית: ₪{yearly_total:.2f}
+• ממוצע למנוי: ₪{average_sub:.2f}
+
+📊 **פילוח לפי קטגוריות:**
+        """
+        
+        for category, count, amount in categories:
+            emoji = self.get_category_emoji(category)
+            percentage = (amount / monthly_total * 100) if monthly_total > 0 else 0
+            stats_text += f"{emoji} {category}: {count} מנויים • ₪{amount:.2f} ({percentage:.1f}%)\n"
+        
+        if len(currencies) > 1:
+            stats_text += f"\n💱 **פילוח לפי מטבע:**\n"
+            for currency, count, amount in currencies:
+                stats_text += f"{currency}: {count} מנויים • {amount:.2f}\n"
+        
+        # הוספת תובנות
+        stats_text += f"\n💡 **תובנות:**\n"
+        if yearly_total > 1000:
+            stats_text += f"• אתה מוציא מעל ₪1,000 בשנה על מנויים!\n"
+        if total_subs > 5:
+            stats_text += f"• יש לך {total_subs} מנויים - שקול לבדוק אילו אתה באמת משתמש\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("📈 ניתוח מתקדם", callback_data="analytics")],
+            [InlineKeyboardButton("📅 תשלומים קרובים", callback_data="upcoming")],
+            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def analytics_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ניתוח מתקדם והמלצות חיסכון"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_analytics")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # קבלת כל המנויים
+        cursor.execute('''
+            SELECT service_name, amount, currency, category, created_at, last_reminder_sent
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1
+        ''', (user_id,))
+        subscriptions = cursor.fetchall()
+        
+        conn.close()
+        
+        if not subscriptions:
+            await update.message.reply_text("📈 אין מנויים לניתוח. הוסף מנויים תחילה!")
+            return
+        
+        total_monthly = sum(sub[1] for sub in subscriptions)
+        
+        analytics_text = f"""
+📈 **ניתוח מתקדם - Subscriber_tracking**
+
+💰 **ניתוח כספי:**
+• הוצאה חודשית: ₪{total_monthly:.2f}
+• הוצאה שנתית: ₪{total_monthly * 12:.2f}
+• כ-{(total_monthly / 10000 * 100):.1f}% מהכנסה ממוצעת
+
+🎯 **המלצות חיסכון:**
+        """
+        
+        # המלצות מותאמות אישית
+        recommendations = []
+        
+        # בדיקת מנויים יקרים
+        expensive_subs = [sub for sub in subscriptions if sub[1] > 50]
+        if expensive_subs:
+            recommendations.append(f"💸 יש לך {len(expensive_subs)} מנויים יקרים - שקול חלופות זולות יותר")
+        
+        # בדיקת מנויים דומים
+        streaming_subs = [sub for sub in subscriptions if sub[3] == 'streaming']
+        if len(streaming_subs) > 2:
+            recommendations.append(f"📺 {len(streaming_subs)} שירותי סטרימינג - אולי אפשר להסתפק בפחות?")
+        
+        # בדיקת מנויים ישנים
+        old_subs = []
+        from datetime import datetime, timedelta
+        six_months_ago = datetime.now() - timedelta(days=180)
+        for sub in subscriptions:
+            try:
+                created_date = datetime.strptime(sub[4], "%Y-%m-%d %H:%M:%S")
+                if created_date < six_months_ago:
+                    old_subs.append(sub)
+            except:
+                pass
+        
+        if old_subs:
+            recommendations.append(f"📅 יש לך {len(old_subs)} מנויים מעל 6 חודשים - מתי בדקת אותם לאחרונה?")
+        
+        if not recommendations:
+            recommendations.append("✅ נראה שאתה מנהל היטב את המנויים שלך!")
+        
+        for i, rec in enumerate(recommendations, 1):
+            analytics_text += f"{i}. {rec}\n"
+        
+        # חישוב פוטנציאל חיסכון
+        potential_savings = 0
+        if len(streaming_subs) > 2:
+            potential_savings += (len(streaming_subs) - 2) * 30  # ממוצע מנוי סטרימינג
+        if expensive_subs:
+            potential_savings += len(expensive_subs) * 20  # הנחת חיסכון ממוצעת
+        
+        if potential_savings > 0:
+            analytics_text += f"\n💡 **פוטנציאל חיסכון:** עד ₪{potential_savings:.0f} בחודש!"
+        
+        analytics_text += f"\n📊 **השוואה:**\n"
+        analytics_text += f"• ממוצע ישראלי: ~₪180 בחודש\n"
+        analytics_text += f"• המנויים שלך: ₪{total_monthly:.2f}\n"
+        
+        if total_monthly > 180:
+            analytics_text += f"• אתה מעל הממוצע ב-₪{total_monthly - 180:.2f} 📈"
+        else:
+            analytics_text += f"• אתה מתחת לממוצע! חיסכון של ₪{180 - total_monthly:.2f} 💪"
+        
+        keyboard = [
+            [InlineKeyboardButton("💰 טיפים לחיסכון", callback_data="savings_tips")],
+            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")],
+            [InlineKeyboardButton("📋 המנויים שלי", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(analytics_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def categories_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ניהול קטגוריות מנויים"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_categories")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # קבלת פילוח קטגוריות
+        cursor.execute('''
+            SELECT category, COUNT(*), SUM(amount), AVG(amount)
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1 
+            GROUP BY category 
+            ORDER BY SUM(amount) DESC
+        ''', (user_id,))
+        categories = cursor.fetchall()
+        
+        conn.close()
+        
+        if not categories:
+            await update.message.reply_text("📦 אין מנויים לפי קטגוריות. הוסף מנויים תחילה!")
+            return
+        
+        categories_text = f"""
+📦 **ניהול קטגוריות - {len(categories)} קטגוריות**
+
+📊 **פילוח הוצאות לפי קטגוריה:**
+        """
+        
+        total_amount = sum(cat[2] for cat in categories)
+        
+        for category, count, amount, avg_amount in categories:
+            emoji = self.get_category_emoji(category)
+            percentage = (amount / total_amount * 100) if total_amount > 0 else 0
+            categories_text += f"\n{emoji} **{category.title()}**\n"
+            categories_text += f"   • {count} מנויים • ₪{amount:.2f} ({percentage:.1f}%)\n"
+            categories_text += f"   • ממוצע: ₪{avg_amount:.2f} למנוי\n"
+        
+        categories_text += f"\n💡 **הקטגוריה היקרה ביותר:** {categories[0][0].title()}"
+        categories_text += f"\n📊 **הקטגוריה הפופולרית ביותר:** {max(categories, key=lambda x: x[1])[0].title()}"
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 סטטיסטיקות מלאות", callback_data="stats")],
+            [InlineKeyboardButton("📈 ניתוח מתקדם", callback_data="analytics")],
+            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(categories_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def upcoming_payments_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הצגת תשלומים קרובים"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_upcoming")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT service_name, amount, currency, billing_day, category
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1
+            ORDER BY billing_day ASC
+        ''', (user_id,))
+        
+        subscriptions = cursor.fetchall()
+        conn.close()
+        
+        if not subscriptions:
+            await update.message.reply_text("📅 אין מנויים פעילים לתצוגת תשלומים קרובים.")
+            return
+        
+        from datetime import datetime, timedelta
+        
+        today = datetime.now().day
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        
+        upcoming_text = f"""
+📅 **תשלומים קרובים (30 יום)**
+
+⏰ **היום: {today}/{current_month}**
+        """
+        
+        upcoming_subs = []
+        total_upcoming = 0
+        
+        for service, amount, currency, billing_day, category in subscriptions:
+            emoji = self.get_category_emoji(category)
+            
+            # חישוב ימים עד החיוב הבא
+            if billing_day >= today:
+                days_until = billing_day - today
+                next_date = f"{billing_day}/{current_month}"
+            else:
+                # החיוב בחודש הבא
+                next_month = current_month + 1 if current_month < 12 else 1
+                days_until = (30 - today) + billing_day  # קירוב
+                next_date = f"{billing_day}/{next_month}"
+            
+            if days_until <= 30:
+                upcoming_subs.append((days_until, service, amount, currency, emoji, next_date))
+                total_upcoming += amount
+        
+        # מיון לפי ימים עד החיוב
+        upcoming_subs.sort(key=lambda x: x[0])
+        
+        if not upcoming_subs:
+            upcoming_text += "\n✅ אין תשלומים ב-30 הימים הקרובים!"
+        else:
+            upcoming_text += f"\n💰 **סך תשלומים צפויים:** ₪{total_upcoming:.2f}\n"
+            
+            for days, service, amount, currency, emoji, next_date in upcoming_subs:
+                if days == 0:
+                    upcoming_text += f"\n🚨 **היום:** {emoji} {service} - {amount} {currency}"
+                elif days == 1:
+                    upcoming_text += f"\n⚠️ **מחר:** {emoji} {service} - {amount} {currency}"
+                elif days <= 7:
+                    upcoming_text += f"\n🔔 **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
+                else:
+                    upcoming_text += f"\n📌 **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
+        
+        # הוספת טיפים
+        upcoming_text += f"\n\n💡 **טיפ:** בדוק אילו מנויים אתה באמת משתמש לפני התחדשותם!"
+        
+        keyboard = [
+            [InlineKeyboardButton("📋 כל המנויים", callback_data="my_subs")],
+            [InlineKeyboardButton("⚙️ הגדרת התראות", callback_data="settings")],
+            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(upcoming_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def export_data_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ייצוא נתוני המנויים"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "export_data")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT service_name, amount, currency, billing_day, category, notes, created_at
+            FROM subscriptions 
+            WHERE user_id = ? AND is_active = 1
+            ORDER BY service_name
+        ''', (user_id,))
+        
+        subscriptions = cursor.fetchall()
+        conn.close()
+        
+        if not subscriptions:
+            await update.message.reply_text("📤 אין נתונים לייצוא. הוסף מנויים תחילה!")
+            return
+        
+        # יצירת נתונים בפורמט CSV
+        csv_content = "שירות,סכום,מטבע,יום_חיוב,קטגוריה,הערות,תאריך_יצירה\n"
+        
+        for service, amount, currency, billing_day, category, notes, created_at in subscriptions:
+            notes = notes or ""
+            csv_content += f'"{service}",{amount},"{currency}",{billing_day},"{category}","{notes}","{created_at}"\n'
+        
+        # יצירת סיכום
+        total_monthly = sum(sub[1] for sub in subscriptions)
+        summary = f"""
+📤 **ייצוא נתונים הושלם**
+
+📊 **סיכום:**
+• {len(subscriptions)} מנויים פעילים
+• הוצאה חודשית: ₪{total_monthly:.2f}
+• הוצאה שנתית: ₪{total_monthly * 12:.2f}
+
+📋 **הנתונים:**
+{csv_content}
+
+💾 **הנתונים מוכנים להעתקה ושמירה כקובץ CSV**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")],
+            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(summary, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הגדרות משתמש"""
+        user_id = update.effective_user.id
+        self.log_user_action(user_id, "view_settings")
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
+        settings = cursor.fetchone()
+        
+        conn.close()
+        
+        if not settings:
+            self.ensure_user_settings(user_id)
+            settings = (user_id, 'Asia/Jerusalem', '09:00', 'he', '₪', 1, 1, None, None)
+        
+        settings_text = f"""
+⚙️ **הגדרות Subscriber_tracking**
+
+🔔 **התראות:**
+• שעת התראה: {settings[2]}
+• התראות שבועיות: {'פעיל' if settings[5] else 'כבוי'}
+
+🌍 **הגדרות כלליות:**
+• אזור זמן: {settings[1]}
+• שפה: {settings[3]}
+• מטבע מועדף: {settings[4]}
+
+🤖 **פיצ'רים חכמים:**
+• המלצות חכמות: {'פעיל' if settings[6] else 'כבוי'}
+• OCR (זיהוי מתמונות): {'פעיל' if Config.ENABLE_OCR else 'כבוי'}
+
+💡 **טיפ:** הגדרות אלו משפיעות על חוויית השימוש שלך
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("🔔 שינוי שעת התראה", callback_data="settings_notifications")],
+            [InlineKeyboardButton("💱 שינוי מטבע", callback_data="settings_currency")],
+            [InlineKeyboardButton("🤖 פיצ'רים חכמים", callback_data="settings_features")],
+            [InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def edit_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """עריכת מנוי קיים"""
+        # קבלת מספר המנוי מהמסר
+        sub_id = int(update.message.text.split('_')[1])
+        user_id = update.effective_user.id
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT service_name, amount, currency, billing_day, category, notes
+            FROM subscriptions 
+            WHERE id = ? AND user_id = ? AND is_active = 1
+        ''', (sub_id, user_id))
+        
+        subscription = cursor.fetchone()
+        conn.close()
+        
+        if not subscription:
+            await update.message.reply_text("❌ מנוי לא נמצא או שאין לך הרשאה לערוך אותו.")
+            return
+        
+        service, amount, currency, billing_day, category, notes = subscription
+        notes = notes or "אין הערות"
+        
+        edit_text = f"""
+✏️ **עריכת מנוי: {service}**
+
+📋 **פרטים נוכחיים:**
+• 💰 סכום: {amount} {currency}
+• 📅 יום חיוב: {billing_day}
+• 📦 קטגוריה: {category}
+• 📝 הערות: {notes}
+
+**מה תרצה לערוך?**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("💰 סכום", callback_data=f"edit_amount_{sub_id}")],
+            [InlineKeyboardButton("📅 יום חיוב", callback_data=f"edit_billing_{sub_id}")],
+            [InlineKeyboardButton("📦 קטגוריה", callback_data=f"edit_category_{sub_id}")],
+            [InlineKeyboardButton("📝 הערות", callback_data=f"edit_notes_{sub_id}")],
+            [InlineKeyboardButton("🔙 חזרה למנויים", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(edit_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def delete_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """מחיקת מנוי"""
+        # קבלת מספר המנוי מהמסר
+        sub_id = int(update.message.text.split('_')[1])
+        user_id = update.effective_user.id
+        
+        conn = sqlite3.connect(Config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT service_name, amount, currency
+            FROM subscriptions 
+            WHERE id = ? AND user_id = ? AND is_active = 1
+        ''', (sub_id, user_id))
+        
+        subscription = cursor.fetchone()
+        
+        if not subscription:
+            conn.close()
+            await update.message.reply_text("❌ מנוי לא נמצא או שאין לך הרשאה למחוק אותו.")
+            return
+        
+        service, amount, currency = subscription
+        
+        delete_text = f"""
+🗑️ **מחיקת מנוי**
+
+⚠️ **אתה עומד למחוק:**
+📱 **שירות:** {service}
+💰 **סכום:** {amount} {currency}
+
+**האם אתה בטוח? הפעולה בלתי הפיכה!**
+        """
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ כן, מחק", callback_data=f"confirm_delete_{sub_id}")],
+            [InlineKeyboardButton("❌ ביטול", callback_data="my_subs")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        conn.close()
+        await update.message.reply_text(delete_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """ביטול פעולה נוכחית"""
+        await update.message.reply_text(
+            "❌ **פעולה בוטלה**\n\n"
+            "🏠 חזרה לתפריט הראשי:\n"
+            "/start - תפריט ראשי\n"
+            "/my_subs - המנויים שלי\n"
+            "/help - עזרה"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    async def add_currency(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הוספת מטבע מותאם אישית"""
+        currency_input = update.message.text.strip()
+        
+        # בדיקה שהמטבע לא ריק ולא ארוך מדי
+        if not currency_input or len(currency_input) > 5:
+            await update.message.reply_text(
+                "❌ מטבע לא חוקי. נסה שוב:\n"
+                "(לדוגמה: £, CHF, ¥, RUB)"
+            )
+            return ADD_CURRENCY
+        
+        context.user_data['currency'] = currency_input
+        
+        await update.message.reply_text(
+            f"✅ **מטבע נשמר:** {currency_input}\n\n"
+            "📅 **באיזה תאריך בחודש יש חיוב?**\n\n"
+            "הכנס מספר בין 1-28\n"
+            "(לדוגמה: 15 = חמישה עשר בכל חודש)\n\n"
+            "💡 **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
+        )
+        return ADD_DATE
+
+    async def add_date(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """הוספת תאריך חיוב וסיום התהליך"""
+        try:
+            billing_day = int(update.message.text.strip())
+            
+            if not 1 <= billing_day <= 28:
+                await update.message.reply_text(
+                    "❌ תאריך לא חוקי. הכנס מספר בין 1-28:\n"
+                    "(לדוגמה: 15 לחמישה עשר בחודש)"
+                )
+                return ADD_DATE
+            
+            # שמירת המנוי במסד הנתונים
+            user_id = update.effective_user.id
+            service_name = context.user_data['service_name']
+            amount = context.user_data['amount']
+            currency = context.user_data['currency']
+            category = context.user_data.get('detected_category', 'other')
+            
+            conn = sqlite3.connect(Config.DATABASE_PATH)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO subscriptions (user_id, service_name, amount, currency, billing_day, category)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, service_name, amount, currency, billing_day, category))
+            
+            conn.commit()
+            conn.close()
+            
+            # רישום פעילות
+            self.log_user_action(user_id, "subscription_added", metadata=f"{service_name}_{amount}_{currency}")
+            
+            success_text = f"""
+✅ **מנוי נוסף בהצלחה!**
+
+📱 **שירות:** {service_name}
+💰 **סכום:** {amount} {currency}
+📅 **יום חיוב:** {billing_day} בכל חודש
+📦 **קטגוריה:** {category}
+
+🔔 **תזכורות:** תקבל התראה שבוע ויום לפני כל חיוב
+
+🎯 **מה הלאה?**
+            """
+            
+            keyboard = [
+                [InlineKeyboardButton("📋 ראה את כל המנויים", callback_data="my_subs")],
+                [InlineKeyboardButton("➕ הוסף מנוי נוסף", callback_data="quick_add")],
+                [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(success_text, reply_markup=reply_markup, parse_mode='Markdown')
+            
+            # ניקוי נתוני ההקשר
+            context.user_data.clear()
+            return ConversationHandler.END
+            
+        except ValueError:
+            await update.message.reply_text(
+                "❌ נסה להכניס מספר חוקי בין 1-28:\n"
+                "(לדוגמה: 15)"
+            )
+            return ADD_DATE
+
+    async def handle_screenshot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """טיפול בצילום מסך ללא OCR"""
+        await update.message.reply_text(
+            "📸 **קיבלתי את התמונה!**\n\n"
+            "🔍 **זיהוי אוטומטי לא זמין כרגע**\n"
+            "השתמש ב-/add_subscription להוספה ידנית\n\n"
+            "💡 **טיפ:** אם יש לך פרטי החיוב, אני יכול לעזור לך להוסיף אותם במהירות!"
+        )
+
+    async def handle_quick_actions(self, query, context):
+        """טיפול בפעולות מהירות"""
+        if query.data == "quick_add":
+            await query.edit_message_text(
+                "📝 **הוספת מנוי מהירה**\n\n"
+                "לחץ על /add_subscription להתחלת התהליך המלא\n"
+                "או שלח צילום מסך לזיהוי אוטומטי! 📸"
+            )
+        elif query.data == "demo":
+            demo_text = """
+🎯 **דמו - Subscriber_tracking Bot**
+
+**מה אני יכול לעשות בשבילך:**
+
+📱 **ניהול מנויים:**
+• הוספה קלה עם /add_subscription
+• צפייה בכל המנויים עם /my_subs
+• עריכה ומחיקה פשוטה
+
+📊 **ניתוח והתובנות:**
+• סטטיסטיקות מפורטות (/stats)
+• ניתוח חכם והמלצות (/analytics)
+• תשלומים קרובים (/upcoming)
+
+🔔 **תזכורות אוטומטיות:**
+• שבוע לפני כל חיוב
+• יום לפני כל חיוב
+• ניתן להתאים בהגדרות
+
+✨ **פיצ'רים חכמים:**
+• זיהוי אוטומטי מצילומי מסך
+• זיהוי קטגוריות אוטומטי
+• המלצות חיסכון מותאמות
+
+🚀 **מוכן להתחיל? לחץ /add_subscription**
+            """
+            await query.edit_message_text(demo_text)
+        else:
+            await query.edit_message_text("פעולה לא זוהתה. נסה שוב.")
+
+    async def handle_ocr_actions(self, query, context):
+        """טיפול בפעולות OCR"""
+        if query.data.startswith("ocr_confirm_"):
+            # עיבוד אישור OCR
+            parts = query.data.split('_')
+            service = parts[2]
+            amount = float(parts[3])
+            currency = parts[4]
+            
+            # המשך עם תהליך הוספת מנוי
+            context.user_data['service_name'] = service
+            context.user_data['amount'] = amount
+            context.user_data['currency'] = currency
+            
+            await query.edit_message_text(
+                f"✅ **מאושר!**\n\n"
+                f"📱 {service}\n💰 {amount} {currency}\n\n"
+                "📅 **באיזה תאריך בחודש יש חיוב?** (1-28)"
+            )
+        elif query.data == "ocr_edit":
+            await query.edit_message_text(
+                "✏️ **עריכת פרטים**\n\n"
+                "השתמש ב-/add_subscription להוספה ידנית\n"
+                "כך תוכל לעדכן את כל הפרטים לפי הצורך."
+            )
+        elif query.data == "ocr_retry":
+            await query.edit_message_text(
+                "🔄 **נסה שוב**\n\n"
+                "שלח צילום מסך נוסף או השתמש ב-/add_subscription להוספה ידנית."
+            )
+        elif query.data == "ocr_cancel":
+            await query.edit_message_text(
+                "❌ **פעולה בוטלה**\n\n"
+                "לחץ /start לחזרה לתפריט הראשי"
+            )
 
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
