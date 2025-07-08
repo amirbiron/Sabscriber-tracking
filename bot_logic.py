@@ -44,7 +44,14 @@ try:
 except ImportError:
     REQUESTS_AVAILABLE = False
 import logging
+import logging
 
+# הגדרת logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 # הגדרת logger גלובלי
 logger = logging.getLogger(__name__)
 logging.basicConfig(
