@@ -19,6 +19,26 @@ from typing import Optional, List, Dict, Tuple
 import io
 from pathlib import Path
 
+# הגדרת logging בתחילת הקובץ - לפני כל השאר
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# עכשיו ניתן להוסיף file handler אם אפשר (רק בסביבה מקומית)
+try:
+    if not os.getenv('RENDER'):  # לא ברנדר
+        file_handler = logging.FileHandler('subscriber_tracking.log', encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        logger.info("File logging enabled")
+    else:
+        logger.info("Running on Render - console logging only")
+except Exception:
+    logger.warning("Could not create log file - using console only")
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
@@ -31,33 +51,23 @@ from apscheduler.triggers.cron import CronTrigger
 try:
     import pytesseract
     from PIL import Image
+    # Test if tesseract is actually available
+    pytesseract.get_tesseract_version()
     OCR_AVAILABLE = True
-except ImportError:
+    logger.info("OCR support available")
+except (ImportError, Exception):
     OCR_AVAILABLE = False
-    logger.warning("OCR not available - install pytesseract and Pillow for image recognition")
+    logger.warning("OCR not available - pytesseract/tesseract not installed")
 
 try:
     import requests
     from dotenv import load_dotenv
     load_dotenv()
     REQUESTS_AVAILABLE = True
+    logger.info("Requests support available")
 except ImportError:
     REQUESTS_AVAILABLE = False
-import logging
-import logging
-
-# הגדרת logger
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-# הגדרת logger גלובלי
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+    logger.warning("Requests not available - some features may be limited")
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
@@ -77,6 +87,15 @@ class Config:
     # Port for Render (if needed for web service)
     PORT = int(os.getenv('PORT', 8000))
     
+    @classmethod
+    def validate_token(cls):
+        """בדיקת תקינות הטוקן"""
+        if not cls.TELEGRAM_BOT_TOKEN:
+            raise ValueError("❌ TELEGRAM_BOT_TOKEN environment variable not set! Please configure it in Render.")
+        if cls.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+            raise ValueError("❌ TELEGRAM_BOT_TOKEN contains placeholder value! Please set your actual bot token.")
+        return cls.TELEGRAM_BOT_TOKEN
+    
     # Common services
     COMMON_SERVICES = [
         'Netflix', 'Spotify', 'ChatGPT Plus', 'YouTube Premium',
@@ -84,17 +103,6 @@ class Config:
         'Adobe Creative Cloud', 'Dropbox', 'iCloud', 'HBO Max',
         'Zoom Pro', 'Slack', 'Notion', 'Figma', 'Canva Pro'
     ]
-
-# הגדרת logging מתקדם לRender
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Console output for Render logs
-        logging.FileHandler('subscriber_tracking.log', encoding='utf-8')  # File logging
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Conversation states
 ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
@@ -104,16 +112,20 @@ class SubscriberTrackingBot:
     """🤖 Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
     
     def __init__(self, token: str = None):
-        self.token = token or Config.TELEGRAM_BOT_TOKEN
-        self.app = Application.builder().token(self.token).build()
-        self.scheduler = AsyncIOScheduler()
-        self.bot_info = {
-            'name': 'Subscriber_tracking',
-            'version': '1.0.0',
-            'description': 'בוט ניהול מנויים אישי חכם'
-        }
-        self.init_database()
-        self.setup_handlers()
+        try:
+            self.token = token or Config.validate_token()
+            self.app = Application.builder().token(self.token).build()
+            self.scheduler = AsyncIOScheduler()
+            self.bot_info = {
+                'name': 'Subscriber_tracking',
+                'version': '1.0.0',
+                'description': 'בוט ניהול מנויים אישי חכם'
+            }
+            self.init_database()
+            self.setup_handlers()
+        except ValueError as e:
+            logger.error(f"Configuration error: {e}")
+            raise
 
     def init_database(self):
         """אתחול מסד הנתונים של Subscriber_tracking"""
@@ -1574,11 +1586,7 @@ class SubscriberTrackingBot:
         logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
         logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
         logger.info(f"🌐 Port: {Config.PORT}")
-        
-        # וידוא שיש טוקן
-        if Config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-            logger.error("❌ TELEGRAM_BOT_TOKEN not set! Please configure environment variables in Render.")
-            return
+        logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
         
         # הפעלת scheduler
         self.scheduler.start()
@@ -1595,12 +1603,27 @@ class SubscriberTrackingBot:
         
         logger.info("🚀 Subscriber_tracking Bot is ready on Render!")
         
-        # הפעלת הבוט
-        try:
-            self.app.run_polling(drop_pending_updates=True)
-        except Exception as e:
-            logger.error(f"❌ Bot crashed: {e}")
-            raise
+        # הפעלת הבוט עם הגנה מפני אינסטנסים כפולים
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🚀 Starting bot polling (attempt {attempt + 1}/{max_retries})")
+                self.app.run_polling(
+                    drop_pending_updates=True,
+                    close_loop=False,
+                    stop_signals=None  # מניעת התנגשויות עם Flask
+                )
+                break
+            except Exception as e:
+                if "make sure that only one bot instance is running" in str(e).lower():
+                    logger.warning(f"⚠️ Bot instance conflict detected (attempt {attempt + 1})")
+                    if attempt < max_retries - 1:
+                        logger.info("⏳ Waiting 10 seconds before retry...")
+                        import time
+                        time.sleep(10)
+                        continue
+                logger.error(f"❌ Bot crashed: {e}")
+                raise
 
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית - מותאם לRender"""
@@ -1682,20 +1705,16 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+def get_telegram_app():
+    """יצירת אפליקציית הטלגרם"""
+    try:
+        bot = SubscriberTrackingBot()
+        return bot.app
+    except ValueError as e:
+        logger.error(f"Failed to create Telegram app: {e}")
+        raise
+
 if __name__ == "__main__":
     print("🎯 Starting Subscriber_tracking Bot...")
     bot = SubscriberTrackingBot()
     bot.run()
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-
-def get_telegram_app():
-    """יצירת אפליקציית הטלגרם"""
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("saved", saved_articles))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyboard_buttons))
-    application.add_handler(CallbackQueryHandler(button_callback))
-
-    return application
