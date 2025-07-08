@@ -27,11 +27,24 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# הגדרת logger לפני שימוש
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# הגדרת logging מתקדם לRender - עם error handling
+try:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),  # Console output for Render logs
+            logging.FileHandler('subscriber_tracking.log', encoding='utf-8')  # File logging
+        ]
+    )
+except Exception:
+    # אם לא ניתן ליצור קובץ לוג, נשתמש רק בקונסול
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+
 logger = logging.getLogger(__name__)
 
 # Optional imports for advanced features
@@ -50,6 +63,7 @@ try:
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+    logger.warning("Requests not available - some features may be limited")
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
@@ -85,17 +99,6 @@ class Config:
         'Adobe Creative Cloud', 'Dropbox', 'iCloud', 'HBO Max',
         'Zoom Pro', 'Slack', 'Notion', 'Figma', 'Canva Pro'
     ]
-
-# הגדרת logging מתקדם לRender - מתווסף לקונפיגורציה הקיימת
-logging.getLogger().handlers.clear()
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Console output for Render logs
-        logging.FileHandler('subscriber_tracking.log', encoding='utf-8')  # File logging
-    ]
-)
 
 # Conversation states
 ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
