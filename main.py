@@ -22,7 +22,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"✅ Subscriber_tracking Bot is running")
+        self.wfile.write("✅ Subscriber_tracking Bot is running".encode("utf-8"))
 
 def run_dummy_server():
     port = Config.PORT
