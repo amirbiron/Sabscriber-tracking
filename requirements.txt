@@ -1,5 +1,9 @@
 python-telegram-bot==20.0
 requests
 APScheduler
+cursor/fix-undefined-logger-in-deployment-logs-067e
 python-dotenv
 Pillow
+pytesseract
+pillow
+main
