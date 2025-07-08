@@ -4,3 +4,4 @@ requests
 openai
 newspaper3k
 bs4
+APScheduler
