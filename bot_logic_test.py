@@ -1,5 +1,11 @@
 main.py
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 #!/usr/bin/env python3 """ 🚀 Entry point for ReadLater Bot - Polling only """
 
 import os import logging import requests from bot_logic import get_telegram_app
