@@ -43,7 +43,14 @@ try:
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+import logging
 
+# הגדרת logger גלובלי
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 # Configuration class for Render deployment
 class Config:
     # Bot settings - Environment variables from Render
