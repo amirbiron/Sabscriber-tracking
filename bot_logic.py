@@ -1672,3 +1672,16 @@ if __name__ == "__main__":
     print("🎯 Starting Subscriber_tracking Bot...")
     bot = SubscriberTrackingBot()
     bot.run()
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+
+def get_telegram_app():
+    """יצירת אפליקציית הטלגרם"""
+    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
+    
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("saved", saved_articles))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_keyboard_buttons))
+    application.add_handler(CallbackQueryHandler(button_callback))
+
+    return application
