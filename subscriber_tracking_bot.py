@@ -49,6 +49,17 @@ class Config:
     # Bot settings - Environment variables from Render
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
     
+    # Validate token early
+    if not TELEGRAM_BOT_TOKEN:
+        import sys
+        print("❌ ERROR: TELEGRAM_BOT_TOKEN environment variable is required!")
+        print("📋 Please set your bot token in Render environment variables:")
+        print("   1. Go to your Render service dashboard")
+        print("   2. Navigate to Environment tab") 
+        print("   3. Add: TELEGRAM_BOT_TOKEN=your_actual_bot_token")
+        print("   4. Get your token from @BotFather on Telegram")
+        sys.exit(1)
+    
     # Database settings
     DATABASE_PATH = os.getenv('DATABASE_PATH', '/tmp/subscriber_tracking.db')
     
@@ -91,6 +102,15 @@ class SubscriberTrackingBot:
     
     def __init__(self, token: str = None):
         self.token = token or Config.TELEGRAM_BOT_TOKEN
+        
+        # Validate token
+        if not self.token:
+            raise ValueError("❌ TELEGRAM_BOT_TOKEN is required but not provided!")
+            
+        # Additional validation to prevent test tokens
+        if self.token in ['test_token', 'YOUR_BOT_TOKEN_HERE', 'your_bot_token_here']:
+            raise ValueError(f"❌ Invalid token detected: '{self.token}'. Please use a real bot token from @BotFather!")
+            
         self.app = Application.builder().token(self.token).build()
         self.scheduler = AsyncIOScheduler()
         self.bot_info = {
@@ -1560,11 +1580,7 @@ class SubscriberTrackingBot:
         logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
         logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
         logger.info(f"🌐 Port: {Config.PORT}")
-        
-        # וידוא שיש טוקן
-        if Config.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-            logger.error("❌ TELEGRAM_BOT_TOKEN not set! Please configure environment variables in Render.")
-            return
+        logger.info(f"🔑 Token: {self.token[:10]}...{self.token[-4:] if len(self.token) > 14 else '***'}")
         
         # הפעלת scheduler
         self.scheduler.start()
