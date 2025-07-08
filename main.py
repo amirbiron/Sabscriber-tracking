@@ -6,9 +6,9 @@
 import os
 import logging
 import requests
-from bot_logic import get_telegram_app  
+from bot_logic import get_telegram_app
 
-# הגדרת לוגים
+# לוגים
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -20,7 +20,7 @@ def main():
 
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
-        logger.error("❌ TELEGRAM_BOT_TOKEN not found in environment variables!")
+        logger.error("❌ TELEGRAM_BOT_TOKEN not found!")
         return
 
     try:
