@@ -34,7 +34,7 @@ async def main():
     try:
         bot = SubscriberTrackingBot()
         logger.info("📡 Bot initialized")
-        bot.run()
+        await bot.run()
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
