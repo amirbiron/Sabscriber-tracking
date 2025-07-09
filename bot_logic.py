@@ -1590,7 +1590,7 @@ class SubscriberTrackingBot:
         
         # הפעלת scheduler
         if not self.scheduler.running:
-        self.scheduler.start()
+    self.scheduler.start()
         logger.info("📅 Scheduler started successfully")
         
         # הוספת job לבדיקת תזכורות
