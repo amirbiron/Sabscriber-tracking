@@ -1589,6 +1589,7 @@ class SubscriberTrackingBot:
         logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
         
         # הפעלת scheduler
+        if not self.scheduler.running:
         self.scheduler.start()
         logger.info("📅 Scheduler started successfully")
         
