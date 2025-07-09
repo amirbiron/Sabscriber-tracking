@@ -17,16 +17,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def main():
-    """הפעלת Subscriber_tracking Bot"""
+    """הפעלת הבוט"""
     logger.info("🚀 Starting Subscriber_tracking Bot...")
-    
+
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
         logger.error("❌ TELEGRAM_BOT_TOKEN not found!")
         return
 
     try:
-        # מחיקת webhook כדי לא לגרום לקונפליקט
         response = requests.post(f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true")
         logger.info(f"🔧 Webhook deleted: {response.json()}")
     except Exception as e:
@@ -34,21 +33,22 @@ async def main():
 
     try:
         bot = SubscriberTrackingBot()
-        logger.info("📡 Bot initialized!")
-
-        # הפעלת הסקדולר אם קיים
-        if hasattr(bot, 'scheduler'):
-            bot.scheduler.start(paused=False)
-            logger.info("🕒 Scheduler started")
-
+        logger.info("📡 Bot initialized")
         bot.run()
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
 
+# 👇 כאן זה הפתרון האמיתי ללולאות asyncio מתנגשות
 if __name__ == "__main__":
-    import asyncio
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            logger.warning("⚠️ Event loop is already running. Scheduling task...")
+            loop.create_task(main())
+        else:
+            loop.run_until_complete(main())
+    except RuntimeError:
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        new_loop.run_until_complete(main())
