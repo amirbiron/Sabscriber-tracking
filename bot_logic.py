@@ -1578,7 +1578,8 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
-    def run(self):
+    async def run(self):
+    await self.app.run_polling():
         """הפעלת Subscriber_tracking Bot ב-Render"""
         logger.info("🤖 Subscriber_tracking Bot starting on Render...")
         logger.info(f"📋 Version: {self.bot_info['version']}")
