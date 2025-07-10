@@ -1616,13 +1616,16 @@ class SubscriberTrackingBot:
 
         # הפעל את הבוט ב־polling אם app קיים
         if self.app:
-            try:
-                logger.info(" Starting bot polling...")
-                await self.app.run_polling(close_loop=False)
-            except Exception as e:
-                logger.error(f" Bot polling failed: {e}")
-        else:
-            logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
+    try:
+        logger.info(" Starting bot polling...")
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling()
+        await self.app.updater.idle()
+    except Exception as e:
+        logger.error(f" Bot polling failed: {e}")
+else:
+    logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
          
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
