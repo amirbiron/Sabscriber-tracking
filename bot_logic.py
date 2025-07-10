@@ -17,6 +17,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 import io
+from telegram.ext import ApplicationBuilder
 from pathlib import Path
 
 # הגדרת logging בתחילת הקובץ - לפני כל השאר
