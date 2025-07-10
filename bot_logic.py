@@ -1591,11 +1591,8 @@ class SubscriberTrackingBot:
     def __init__(self):
         self.token = "your_token_here"
         self.bot_info = {"version": "1.0"}
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from telegram.ext import ApplicationBuilder
-
-self.scheduler = AsyncIOScheduler()
-self.app = ApplicationBuilder().token(self.token).build()
+        self.scheduler = AsyncIOScheduler()
+        self.app = ApplicationBuilder().token(self.token).build()
 
     async def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
@@ -1625,7 +1622,7 @@ self.app = ApplicationBuilder().token(self.token).build()
                 logger.error(f" Bot polling failed: {e}")
         else:
             logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
-
+         
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
         try:
