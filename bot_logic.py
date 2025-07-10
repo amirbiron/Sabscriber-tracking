@@ -1598,7 +1598,7 @@ class SubscriberTrackingBot:
         self.scheduler = AsyncIOScheduler(timezone="Asia/Jerusalem")
         self.app = ApplicationBuilder().token(self.token).build()
 
-    async def run(self):
+async def run(self):
     """הפעלת Subscriber_tracking Bot ב-Render"""
     logger.info("🚀 Subscriber_tracking Bot starting on Render...")
     logger.info(f"🔢 Version: {self.bot_info['version']}")
@@ -1607,7 +1607,6 @@ class SubscriberTrackingBot:
     logger.info(f"🌐 Port: {Config.PORT}")
     logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
 
-    # הפעל את המתזמן אם מאותחל
     if self.scheduler:
         try:
             self.scheduler.start()
@@ -1617,18 +1616,18 @@ class SubscriberTrackingBot:
     else:
         logger.warning("⚠️ Scheduler is None")
 
-    # הפעל את הבוט בפולינג
     if self.app:
         try:
             logger.info("▶️ Starting bot polling...")
             await self.app.initialize()
             await self.app.start()
             await self.app.updater.start_polling()
-            await self.app.updater.idle()
+            await self.app.updater.stop()
         except Exception as e:
             logger.error(f"❌ Bot polling failed: {e}")
     else:
         logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+    
          
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
