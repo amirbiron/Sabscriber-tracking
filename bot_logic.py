@@ -1578,22 +1578,6 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
-import logging
-import signal
-import sys
-import sqlite3
-from datetime import datetime
-from apscheduler.triggers.cron import CronTrigger
-
-logger = logging.getLogger(__name__)
-
-class SubscriberTrackingBot:
-    def __init__(self):
-        self.token = "your_token_here"
-        self.bot_info = {"version": "1.0"}
-        self.scheduler = None  # תממש לפי מה שכבר היה לך
-        self.app = None        # תממש לפי מה שכבר היה לך
-
     async def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
         logger.info(" Subscriber_tracking Bot starting on Render...")
@@ -1603,25 +1587,25 @@ class SubscriberTrackingBot:
         logger.info(f" Port: {Config.PORT}")
         logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
 
-    #  הפעל את המתזמן אם הוא מאותחל
-    if self.scheduler:
-        try:
-            self.scheduler.start()
-            logger.info(" Scheduler started")
-        except Exception as e:
-            logger.warning(f" Scheduler couldn't start: {e}")
-    else:
-        logger.warning(" Scheduler is None")
+        # הפעל את המתזמן אם הוא מאותחל
+        if self.scheduler:
+            try:
+                self.scheduler.start()
+                logger.info(" Scheduler started")
+            except Exception as e:
+                logger.warning(f" Scheduler couldn't start: {e}")
+        else:
+            logger.warning(" Scheduler is None")
 
-    #  הפעל את הבוט ב־polling אם app קיים
-    if self.app:
-        try:
-            logger.info(" Starting bot polling...")
-            await self.app.run_polling()
-        except Exception as e:
-            logger.error(f" Bot polling failed: {e}")
-    else:
-        logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
+        # הפעל את הבוט ב־polling אם app קיים
+        if self.app:
+            try:
+                logger.info(" Starting bot polling...")
+                await self.app.run_polling()
+            except Exception as e:
+                logger.error(f" Bot polling failed: {e}")
+        else:
+            logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
 
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
