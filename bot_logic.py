@@ -1595,13 +1595,13 @@ class SubscriberTrackingBot:
         self.app = None        # תממש לפי מה שכבר היה לך
 
     async def run(self):
-    """הפעלת Subscriber_tracking Bot ב-Render"""
-    logger.info(" Subscriber_tracking Bot starting on Render...")
-    logger.info(f" Version: {self.bot_info['version']}")
-    logger.info(f" Database: {Config.DATABASE_PATH}")
-    logger.info(f" Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-    logger.info(f" Port: {Config.PORT}")
-    logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
+        """הפעלת Subscriber_tracking Bot ב-Render"""
+        logger.info(" Subscriber_tracking Bot starting on Render...")
+        logger.info(f" Version: {self.bot_info['version']}")
+        logger.info(f" Database: {Config.DATABASE_PATH}")
+        logger.info(f" Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
+        logger.info(f" Port: {Config.PORT}")
+        logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
 
     #  הפעל את המתזמן אם הוא מאותחל
     if self.scheduler:
