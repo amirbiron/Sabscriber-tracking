@@ -1579,15 +1579,16 @@ class SubscriberTrackingBot:
     # (כמו stats_command, analytics_command, וכו')
 
     async def run(self):
-    await self.app.run_polling():
-        """הפעלת Subscriber_tracking Bot ב-Render"""
-        logger.info("🤖 Subscriber_tracking Bot starting on Render...")
-        logger.info(f"📋 Version: {self.bot_info['version']}")
-        logger.info(f"📸 OCR Support: {'✅ Available' if OCR_AVAILABLE and Config.ENABLE_OCR else '❌ Not Available'}")
-        logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
-        logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-        logger.info(f"🌐 Port: {Config.PORT}")
-        logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
+    """הפעלת Subscriber_tracking Bot ב-Render"""
+    logger.info("🤖 Subscriber_tracking Bot starting on Render...")
+    logger.info(f"📋 Version: {self.bot_info['version']}")
+    logger.info(f"📸 OCR Support: {'✅ Available' if OCR_AVAILABLE and Config.ENABLE_OCR else '❌ Not Available'}")
+    logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
+    logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
+    logger.info(f"🌐 Port: {Config.PORT}")
+    logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
+
+    await self.app.run_polling()
         
         # הפעלת scheduler
         if not self.scheduler.running:
