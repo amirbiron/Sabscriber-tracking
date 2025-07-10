@@ -1578,73 +1578,52 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
+import logging
+import signal
+import sys
+import sqlite3
+from datetime import datetime
+from apscheduler.triggers.cron import CronTrigger
+
+logger = logging.getLogger(__name__)
+
+class SubscriberTrackingBot:
+    def __init__(self):
+        self.token = "your_token_here"
+        self.bot_info = {"version": "1.0"}
+        self.scheduler = None  # תממש לפי מה שכבר היה לך
+        self.app = None        # תממש לפי מה שכבר היה לך
+
     async def run(self):
-    """הפעלת Subscriber_tracking Bot ב-Render"""
-    logger.info("🤖 Subscriber_tracking Bot starting on Render...")
-    logger.info(f"📋 Version: {self.bot_info['version']}")
-    logger.info(f"📸 OCR Support: {'✅ Available' if OCR_AVAILABLE and Config.ENABLE_OCR else '❌ Not Available'}")
-    logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
-    logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-    logger.info(f"🌐 Port: {Config.PORT}")
-    logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
+        """הפעלת Subscriber_tracking Bot ב-Render"""
+        logger.info("🤖 Subscriber_tracking Bot starting on Render...")
+        logger.info(f"📋 Version: {self.bot_info['version']}")
+        logger.info(f"🗄️ Database: database.db")
+        logger.info(f"⏰ Notifications: 08:00")
+        logger.info(f"🌐 Port: 8000")
+        logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
 
-    # הפעלת המתזמן אם נדרש
-    if hasattr(self, "scheduler"):
-        self.scheduler.start()
-        logger.info("⏰ Scheduler started")
-
-    # הפעלת הבוט
-    await self.app.run_polling()
-        
-        # הפעלת scheduler
-        if not self.scheduler.running:
-            self.scheduler.start()
-        logger.info("📅 Scheduler started successfully")
-        
-        # הוספת job לבדיקת תזכורות
-        self.scheduler.add_job(
-            self.check_and_send_notifications,
-            CronTrigger(hour=Config.NOTIFICATION_HOUR, minute=Config.NOTIFICATION_MINUTE),
-            id='subscriber_tracking_notifications',
-            name='Daily Subscription Notifications'
-        )
-        logger.info("🔔 Notification job scheduled")
-        
-        logger.info("🚀 Subscriber_tracking Bot is ready on Render!")
-        
-        # הפעלת הבוט עם הגנה מפני אינסטנסים כפולים
-        max_retries = 3
-        for attempt in range(max_retries):
+        if hasattr(self, "scheduler"):
             try:
-                logger.info(f"🚀 Starting bot polling (attempt {attempt + 1}/{max_retries})")
-                self.app.run_polling(
-                    drop_pending_updates=True,
-                    close_loop=False,
-                    stop_signals=None  # מניעת התנגשויות עם Flask
-                )
-                break
+                self.scheduler.start()
+                logger.info("⏰ Scheduler started")
             except Exception as e:
-                if "make sure that only one bot instance is running" in str(e).lower():
-                    logger.warning(f"⚠️ Bot instance conflict detected (attempt {attempt + 1})")
-                    if attempt < max_retries - 1:
-                        logger.info("⏳ Waiting 10 seconds before retry...")
-                        import time
-                        time.sleep(10)
-                        continue
-                logger.error(f"❌ Bot crashed: {e}")
-                raise
+                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+
+        try:
+            logger.info("🚀 Starting bot polling...")
+            await self.app.run_polling()
+        except Exception as e:
+            logger.error(f"❌ Bot polling failed: {e}")
 
     async def check_and_send_notifications(self):
-        """בדיקה ושליחת התראות יומית - מותאם לRender"""
+        """בדיקה ושליחת התראות יומית"""
         try:
             logger.info("🔍 Checking for notifications to send...")
-            
-            conn = sqlite3.connect(Config.DATABASE_PATH)
+            conn = sqlite3.connect("database.db")
             cursor = conn.cursor()
-            
             today = datetime.now().date()
-            
-            # מציאת התראות שצריכות להישלח היום
+
             cursor.execute('''
                 SELECT n.id, n.subscription_id, n.notification_type, s.user_id, 
                        s.service_name, s.amount, s.currency
@@ -1652,61 +1631,47 @@ class SubscriberTrackingBot:
                 JOIN subscriptions s ON n.subscription_id = s.id
                 WHERE n.notification_date = ? AND n.sent = 0 AND s.is_active = 1
             ''', (today,))
-            
+
             notifications = cursor.fetchall()
-            
             if notifications:
                 logger.info(f"📤 Found {len(notifications)} notifications to send")
-            
-            for notification in notifications:
-                notification_id, sub_id, notif_type, user_id, service_name, amount, currency = notification
-                
-                subscription_data = {
-                    'service_name': service_name,
+
+            for n in notifications:
+                notif_id, _, notif_type, user_id, name, amount, currency = n
+                await self.send_notification(user_id, {
+                    'service_name': name,
                     'amount': amount,
                     'currency': currency
-                }
-                
-                await self.send_notification(user_id, subscription_data, notif_type)
-                
-                # סימון ההתראה כנשלחה
-                cursor.execute('UPDATE notifications SET sent = 1 WHERE id = ?', (notification_id,))
-                logger.info(f"✅ Notification sent to user {user_id} for {service_name}")
-            
+                }, notif_type)
+                cursor.execute('UPDATE notifications SET sent = 1 WHERE id = ?', (notif_id,))
+                logger.info(f"✅ Notification sent to user {user_id} for {name}")
+
             conn.commit()
             conn.close()
-            
+
             if not notifications:
                 logger.info("📭 No notifications to send today")
-                
+
         except Exception as e:
             logger.error(f"❌ Error in notification check: {e}")
 
     async def send_notification(self, user_id: int, subscription_data: dict, notification_type: str):
-        """שליחת התראה למשתמש - עם error handling לRender"""
-        service_name = subscription_data['service_name']
+        name = subscription_data['service_name']
         amount = subscription_data['amount']
         currency = subscription_data['currency']
-        
+
         if notification_type == 'week_before':
-            message = f"⏰ **תזכורת שבועית**\n\nהמנוי ל-{service_name} יתחדש בעוד שבוע!\n💰 סכום: {amount} {currency}\n\n🤔 להמשיך איתו או לשקול ביטול?"
+            message = f"⏰ תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n💰 סכום: {amount} {currency}"
         elif notification_type == 'day_before':
-            message = f"🚨 **תזכורת דחופה**\n\nמחר יחויבו {amount} {currency} עבור {service_name}!\n\n💭 זה הזמן האחרון לבטל אם אתה לא משתמש!"
-        
+            message = f"🚨 תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
+
         try:
-            await self.app.bot.send_message(
-                chat_id=user_id, 
-                text=message,
-                parse_mode='Markdown'
-            )
+            await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
             logger.info(f"📤 Notification sent successfully to user {user_id}")
         except Exception as e:
             logger.error(f"❌ Failed to send notification to user {user_id}: {e}")
 
-# טיפול בsignal handlers לRender
-import signal
-import sys
-
+# טיפול בסיגנלים ל־Render
 def signal_handler(sig, frame):
     logger.info("🛑 Received shutdown signal, gracefully stopping...")
     sys.exit(0)
@@ -1715,7 +1680,6 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 def get_telegram_app():
-    """יצירת אפליקציית הטלגרם"""
     try:
         bot = SubscriberTrackingBot()
         return bot.app
@@ -1724,6 +1688,7 @@ def get_telegram_app():
         raise
 
 if __name__ == "__main__":
+    import asyncio
     print("🎯 Starting Subscriber_tracking Bot...")
     bot = SubscriberTrackingBot()
-    bot.run()
+    asyncio.run(bot.run())
