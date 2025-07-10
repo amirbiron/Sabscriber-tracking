@@ -1591,8 +1591,11 @@ class SubscriberTrackingBot:
     def __init__(self):
         self.token = "your_token_here"
         self.bot_info = {"version": "1.0"}
-        self.scheduler = None  # תממש לפי מה שכבר היה לך
-        self.app = None        # תממש לפי מה שכבר היה לך
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from telegram.ext import ApplicationBuilder
+
+self.scheduler = AsyncIOScheduler()
+self.app = ApplicationBuilder().token(self.token).build()
 
     async def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
