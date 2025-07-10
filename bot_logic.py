@@ -1579,53 +1579,56 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
+import os
 import logging
 import signal
 import sys
 import sqlite3
 from datetime import datetime
 from apscheduler.triggers.cron import CronTrigger
+from telegram.ext import ApplicationBuilder
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logger = logging.getLogger(__name__)
 
 class SubscriberTrackingBot:
     def __init__(self):
-        self.token = "your_token_here"
+        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.bot_info = {"version": "1.0"}
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = AsyncIOScheduler(timezone="Asia/Jerusalem")
         self.app = ApplicationBuilder().token(self.token).build()
 
     async def run(self):
         """הפעלת Subscriber_tracking Bot ב-Render"""
-        logger.info(" Subscriber_tracking Bot starting on Render...")
-        logger.info(f" Version: {self.bot_info['version']}")
-        logger.info(f" Database: {Config.DATABASE_PATH}")
-        logger.info(f" Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-        logger.info(f" Port: {Config.PORT}")
-        logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
+        logger.info("🚀 Subscriber_tracking Bot starting on Render...")
+        logger.info(f"🔢 Version: {self.bot_info['version']}")
+        logger.info(f"🗃️ Database: {Config.DATABASE_PATH}")
+        logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
+        logger.info(f"🌐 Port: {Config.PORT}")
+        logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
 
-        # הפעל את המתזמן אם הוא מאותחל
+        # הפעל את המתזמן אם מאותחל
         if self.scheduler:
             try:
                 self.scheduler.start()
-                logger.info(" Scheduler started")
+                logger.info("✅ Scheduler started")
             except Exception as e:
-                logger.warning(f" Scheduler couldn't start: {e}")
+                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
         else:
-            logger.warning(" Scheduler is None")
+            logger.warning("⚠️ Scheduler is None")
 
-        # הפעל את הבוט ב־polling אם app קיים
+        # הפעל את הבוט בפולינג
         if self.app:
-    try:
-        logger.info(" Starting bot polling...")
-        await self.app.initialize()
-        await self.app.start()
-        await self.app.updater.start_polling()
-        await self.app.updater.idle()
-    except Exception as e:
-        logger.error(f" Bot polling failed: {e}")
-else:
-    logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
+            try:
+                logger.info("▶️ Starting bot polling...")
+                await self.app.initialize()
+                await self.app.start()
+                await self.app.updater.start_polling()
+                await self.app.updater.idle()
+            except Exception as e:
+                logger.error(f"❌ Bot polling failed: {e}")
+        else:
+            logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
          
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
