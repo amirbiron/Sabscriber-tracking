@@ -1617,12 +1617,14 @@ class SubscriberTrackingBot:
     else:
         logger.warning("⚠️ Scheduler is None")
 
-    # הפעל את הבוט בשלבים, בלי לסגור את הלולאה
+    # הפעל את הבוט בפולינג
     if self.app:
         try:
             logger.info("▶️ Starting bot polling...")
             await self.app.initialize()
             await self.app.start()
+            await self.app.updater.start_polling()
+            await self.app.updater.idle()
         except Exception as e:
             logger.error(f"❌ Bot polling failed: {e}")
     else:
