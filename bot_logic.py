@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🤖 Subscriber_tracking Bot
+ Subscriber_tracking Bot
 בוט ניהול מנויים אישי חכם - מותאם ל-Render
 
 Created by: Your Development Team
@@ -91,9 +91,9 @@ class Config:
     def validate_token(cls):
         """בדיקת תקינות הטוקן"""
         if not cls.TELEGRAM_BOT_TOKEN:
-            raise ValueError("❌ TELEGRAM_BOT_TOKEN environment variable not set! Please configure it in Render.")
+            raise ValueError(" TELEGRAM_BOT_TOKEN environment variable not set! Please configure it in Render.")
         if cls.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-            raise ValueError("❌ TELEGRAM_BOT_TOKEN contains placeholder value! Please set your actual bot token.")
+            raise ValueError(" TELEGRAM_BOT_TOKEN contains placeholder value! Please set your actual bot token.")
         return cls.TELEGRAM_BOT_TOKEN
     
     # Common services
@@ -109,7 +109,7 @@ ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
 EDIT_CHOICE, EDIT_VALUE = range(2)
 
 class SubscriberTrackingBot:
-    """🤖 Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
+    """ Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
     
     def __init__(self, token: str = None):
         try:
@@ -139,7 +139,7 @@ class SubscriberTrackingBot:
                 user_id INTEGER NOT NULL,
                 service_name TEXT NOT NULL,
                 amount REAL NOT NULL,
-                currency TEXT NOT NULL DEFAULT '₪',
+                currency TEXT NOT NULL DEFAULT '',
                 billing_day INTEGER NOT NULL,
                 billing_cycle TEXT DEFAULT 'monthly',
                 category TEXT DEFAULT 'other',
@@ -202,7 +202,7 @@ class SubscriberTrackingBot:
                 timezone TEXT DEFAULT 'Asia/Jerusalem',
                 notification_time TEXT DEFAULT '09:00',
                 language TEXT DEFAULT 'he',
-                currency_preference TEXT DEFAULT '₪',
+                currency_preference TEXT DEFAULT '',
                 weekly_summary BOOLEAN DEFAULT 1,
                 smart_suggestions BOOLEAN DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -212,18 +212,18 @@ class SubscriberTrackingBot:
         
         # הוספת קטגוריות ברירת מחדל של Subscriber_tracking
         default_categories = [
-            ('streaming', '📺', 'שירותי סטרימינג', '#e74c3c'),
-            ('music', '🎵', 'שירותי מוזיקה', '#9b59b6'),
-            ('productivity', '⚡', 'כלי פרודוקטיביות', '#f39c12'),
-            ('cloud', '☁️', 'אחסון בענן', '#3498db'),
-            ('software', '💻', 'תוכנות ואפליקציות', '#2ecc71'),
-            ('gaming', '🎮', 'משחקים', '#e67e22'),
-            ('news', '📰', 'חדשות ומגזינים', '#34495e'),
-            ('fitness', '💪', 'כושר ובריאות', '#1abc9c'),
-            ('education', '📚', 'חינוך והשכלה', '#8e44ad'),
-            ('communication', '💬', 'תקשורת ושיתוף', '#16a085'),
-            ('financial', '💳', 'שירותים פיננסיים', '#27ae60'),
-            ('other', '📦', 'אחר', '#95a5a6')
+            ('streaming', '', 'שירותי סטרימינג', '#e74c3c'),
+            ('music', '', 'שירותי מוזיקה', '#9b59b6'),
+            ('productivity', '', 'כלי פרודוקטיביות', '#f39c12'),
+            ('cloud', '', 'אחסון בענן', '#3498db'),
+            ('software', '', 'תוכנות ואפליקציות', '#2ecc71'),
+            ('gaming', '', 'משחקים', '#e67e22'),
+            ('news', '', 'חדשות ומגזינים', '#34495e'),
+            ('fitness', '', 'כושר ובריאות', '#1abc9c'),
+            ('education', '', 'חינוך והשכלה', '#8e44ad'),
+            ('communication', '', 'תקשורת ושיתוף', '#16a085'),
+            ('financial', '', 'שירותים פיננסיים', '#27ae60'),
+            ('other', '', 'אחר', '#95a5a6')
         ]
         
         cursor.executemany('''
@@ -233,7 +233,7 @@ class SubscriberTrackingBot:
         
         conn.commit()
         conn.close()
-        logger.info("🗄️ Database initialized successfully")
+        logger.info(" Database initialized successfully")
 
     def setup_handlers(self):
         """הגדרת handlers של Subscriber_tracking"""
@@ -285,34 +285,34 @@ class SubscriberTrackingBot:
         self.log_user_action(user_id, "start")
         
         welcome_text = f"""
-🤖 **ברוך הבא ל-Subscriber_tracking!** 
+ **ברוך הבא ל-Subscriber_tracking!** 
 
-שלום {first_name}! 👋
+שלום {first_name}! 
 אני הבוט החכם שיעזור לך לנהל את כל המנויים שלך בקלות!
 
-🎯 **מה אני יכול לעשות:**
-• 📱 מעקב חכם אחרי כל המנויים
-• 🔔 תזכורות לפני כל חיוב
-• 📊 ניתוח הוצאות וחיסכון
-• 📸 זיהוי אוטומטי מתמונות
-• 💡 המלצות אישיות לחיסכון
+ **מה אני יכול לעשות:**
+  מעקב חכם אחרי כל המנויים
+  תזכורות לפני כל חיוב
+  ניתוח הוצאות וחיסכון
+  זיהוי אוטומטי מתמונות
+  המלצות אישיות לחיסכון
 
-🚀 **בואו נתחיל:**
+ **בואו נתחיל:**
 /add_subscription - הוסף מנוי ראשון
 /my_subs - ראה את המנויים שלך  
 /help - מדריך מלא
 
-💡 **טיפ מקצועי:** שלח לי צילום מסך של חיוב ואני אזהה הכל בשבילך אוטומטי!
+ **טיפ מקצועי:** שלח לי צילום מסך של חיוב ואני אזהה הכל בשבילך אוטומטי!
 
-מוכן להתחיל לחסוך כסף? 💰✨
+מוכן להתחיל לחסוך כסף? 
         """
         
         # הוספת כפתורים לפעולות מהירות
         keyboard = [
-            [InlineKeyboardButton("➕ הוסף מנוי ראשון", callback_data="quick_add")],
-            [InlineKeyboardButton("📊 צפה בדמו", callback_data="demo"), 
-             InlineKeyboardButton("⚙️ הגדרות", callback_data="settings")],
-            [InlineKeyboardButton("❓ עזרה", callback_data="help")]
+            [InlineKeyboardButton(" הוסף מנוי ראשון", callback_data="quick_add")],
+            [InlineKeyboardButton(" צפה בדמו", callback_data="demo"), 
+             InlineKeyboardButton(" הגדרות", callback_data="settings")],
+            [InlineKeyboardButton(" עזרה", callback_data="help")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -321,33 +321,33 @@ class SubscriberTrackingBot:
     async def about_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """מידע על Subscriber_tracking"""
         about_text = f"""
-ℹ️ **אודות Subscriber_tracking Bot**
+ **אודות Subscriber_tracking Bot**
 
-📝 **גרסה:** {self.bot_info['version']}
-🤖 **שם:** {self.bot_info['name']}
-📋 **תיאור:** {self.bot_info['description']}
+ **גרסה:** {self.bot_info['version']}
+ **שם:** {self.bot_info['name']}
+ **תיאור:** {self.bot_info['description']}
 
-👨‍💻 **מפותח על ידי:** Your Development Team
-📅 **תאריך יצירה:** {datetime.now().strftime('%B %Y')}
+ **מפותח על ידי:** Your Development Team
+ **תאריך יצירה:** {datetime.now().strftime('%B %Y')}
 
-🛠️ **טכנולוגיות:**
-• Python 3.8+
-• python-telegram-bot
-• SQLite Database
-• OCR (Tesseract)
-• APScheduler
+ **טכנולוגיות:**
+ Python 3.8+
+ python-telegram-bot
+ SQLite Database
+ OCR (Tesseract)
+ APScheduler
 
-🎯 **מטרה:**
+ **מטרה:**
 לעזור לאנשים לנהל את המנויים שלהם בצורה חכמה ולחסוך כסף!
 
-📈 **סטטיסטיקות:**
-• משתמשים פעילים: {self.get_active_users_count()}
-• מנויים במעקב: {self.get_total_subscriptions()}
-• כסף נחסך השנה: ₪{self.calculate_total_savings():,.2f}
+ **סטטיסטיקות:**
+ משתמשים פעילים: {self.get_active_users_count()}
+ מנויים במעקב: {self.get_total_subscriptions()}
+ כסף נחסך השנה: {self.calculate_total_savings():,.2f}
 
-🆓 **הבוט חינמי לחלוטין ובקוד פתוח!**
+ **הבוט חינמי לחלוטין ובקוד פתוח!**
 
-תודה שאתה משתמש ב-Subscriber_tracking! 🙏
+תודה שאתה משתמש ב-Subscriber_tracking! 
         """
         
         await update.message.reply_text(about_text, parse_mode='Markdown')
@@ -398,50 +398,50 @@ class SubscriberTrackingBot:
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """מדריך שימוש מפורט ב-Subscriber_tracking"""
         help_text = """
-📚 **מדריך Subscriber_tracking - המלא**
+ **מדריך Subscriber_tracking - המלא**
 
-🆕 **הוספת מנויים:**
+ **הוספת מנויים:**
 /add_subscription - מוסיף מנוי חדש בתהליך מודרך
-📸 שלח צילום מסך - זיהוי אוטומטי עם OCR!
+ שלח צילום מסך - זיהוי אוטומטי עם OCR!
 
-👁️ **צפייה וניהול:**
+ **צפייה וניהול:**
 /my_subs - כל המנויים שלך עם אפשרויות עריכה
 /upcoming - תשלומים קרובים (30 יום הקדימה)
 /categories - ניהול קטגוריות למיון טוב יותר
 
-📊 **אנליטיקה ותובנות:**
+ **אנליטיקה ותובנות:**
 /stats - סטטיסטיקות מהירות
 /analytics - ניתוח מעמיק עם המלצות חיסכון
 /export - ייצוא הנתונים שלך ל-CSV
 
-⚙️ **הגדרות והתאמה:**
+ **הגדרות והתאמה:**
 /settings - הגדרות אישיות (שעת התראות, מטבע, שפה)
 
-🔧 **פעולות מתקדמות:**
-• /edit_[מספר] - עריכת מנוי ספציפי
-• /delete_[מספר] - מחיקת מנוי
+ **פעולות מתקדמות:**
+ /edit_[מספר] - עריכת מנוי ספציפי
+ /delete_[מספר] - מחיקת מנוי
 
-🤖 **פיצ'רים חכמים:**
-• 🔔 תזכורות אוטומטיות (שבוע + יום לפני)
-• 📈 ניתוח מגמות הוצאה
-• 💡 המלצות חיסכון מבוססות AI
-• 📸 זיהוי טקסט מתמונות
-• 🎯 מעקב אחר קטגוריות הוצאה
+ **פיצ'רים חכמים:**
+  תזכורות אוטומטיות (שבוע + יום לפני)
+  ניתוח מגמות הוצאה
+  המלצות חיסכון מבוססות AI
+  זיהוי טקסט מתמונות
+  מעקב אחר קטגוריות הוצאה
 
-💡 **טיפים לשימוש מיטבי:**
+ **טיפים לשימוש מיטבי:**
 1. הוסף קטגוריות למנויים לניתוח טוב יותר
 2. בדוק את /upcoming בתחילת כל חודש  
 3. השתמש ב-/analytics לזיהוי הזדמנויות חיסכון
 4. צלם מסכי חיוב ברורים לזיהוי מדויק
 5. עדכן הגדרות ב-/settings לחוויה מותאמת
 
-❓ **שאלות נפוצות:**
-• הבוט תומך בכל המטבעות הנפוצים
-• אפשר לנהל מנויים שנתיים/רבעוניים
-• הנתונים מוגנים ונשמרים מקומית
-• הבוט עובד 24/7 ושולח התראות אוטומטיות
+ **שאלות נפוצות:**
+ הבוט תומך בכל המטבעות הנפוצים
+ אפשר לנהל מנויים שנתיים/רבעוניים
+ הנתונים מוגנים ונשמרים מקומית
+ הבוט עובד 24/7 ושולח התראות אוטומטיות
 
-🆘 **זקוק לעזרה?** פשוט שלח הודעה ואני אעזור!
+ **זקוק לעזרה?** פשוט שלח הודעה ואני אעזור!
         """
         
         await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -470,19 +470,19 @@ class SubscriberTrackingBot:
         self.log_user_action(user_id, "add_subscription_start")
         
         # הצגת שירותים נפוצים לבחירה מהירה
-        common_services_text = "🎯 **שירותים פופולריים:**\n"
+        common_services_text = " **שירותים פופולריים:**\n"
         for i, service in enumerate(Config.COMMON_SERVICES[:8], 1):
             common_services_text += f"{i}. {service}\n"
         
         intro_text = f"""
-📝 **הוספת מנוי חדש ל-Subscriber_tracking**
+ **הוספת מנוי חדש ל-Subscriber_tracking**
 
 {common_services_text}
 
-💬 **איך קוראים לשירות?**
+ **איך קוראים לשירות?**
 (פשוט כתוב את השם או בחר מהרשימה למעלה)
 
-💡 **טיפ:** אפשר גם לשלוח צילום מסך של החיוב לזיהוי אוטומטי!
+ **טיפ:** אפשר גם לשלוח צילום מסך של החיוב לזיהוי אוטומטי!
         """
         
         await update.message.reply_text(intro_text, parse_mode='Markdown')
@@ -509,11 +509,11 @@ class SubscriberTrackingBot:
         context.user_data['service_name'] = service_name
         context.user_data['detected_category'] = detected_category
         
-        category_info = f"\n🎯 **קטגוריה מזוהה:** {detected_category}" if detected_category != 'other' else ""
+        category_info = f"\n **קטגוריה מזוהה:** {detected_category}" if detected_category != 'other' else ""
         
         await update.message.reply_text(
-            f"✅ **שירות נשמר:** {service_name}{category_info}\n\n"
-            f"💰 **כמה זה עולה?**\n"
+            f" **שירות נשמר:** {service_name}{category_info}\n\n"
+            f" **כמה זה עולה?**\n"
             f"(רק המספר, לדוגמה: 29.90 או 19.99)"
         )
         return ADD_AMOUNT
@@ -558,15 +558,15 @@ class SubscriberTrackingBot:
             
             # הצגת כפתורי מטבע מותאמים לישראל
             keyboard = [
-                [InlineKeyboardButton("₪ שקל ישראלי", callback_data="currency_ils")],
+                [InlineKeyboardButton(" שקל ישראלי", callback_data="currency_ils")],
                 [InlineKeyboardButton("$ דולר אמריקאי", callback_data="currency_usd")],
-                [InlineKeyboardButton("€ יורו", callback_data="currency_eur")],
-                [InlineKeyboardButton("💬 מטבע אחר", callback_data="currency_other")]
+                [InlineKeyboardButton(" יורו", callback_data="currency_eur")],
+                [InlineKeyboardButton(" מטבע אחר", callback_data="currency_other")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await update.message.reply_text(
-                f"💰 **סכום:** {amount}\n\n**באיזה מטבע?**",
+                f" **סכום:** {amount}\n\n**באיזה מטבע?**",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
@@ -574,7 +574,7 @@ class SubscriberTrackingBot:
             
         except ValueError:
             await update.message.reply_text(
-                "❌ אופס! צריך להכניס מספר חוקי.\n\n"
+                " אופס! צריך להכניס מספר חוקי.\n\n"
                 "דוגמאות: 29.90, 19.99, 50\n"
                 "נסה שוב:"
             )
@@ -597,24 +597,24 @@ class SubscriberTrackingBot:
     async def handle_currency_selection(self, query, context):
         """טיפול בבחירת מטבע"""
         currency_map = {
-            "currency_ils": "₪",
+            "currency_ils": "",
             "currency_usd": "$", 
-            "currency_eur": "€"
+            "currency_eur": ""
         }
         
         if query.data == "currency_other":
             await query.edit_message_text(
-                "💱 **איזה מטבע?**\n"
-                "(הכנס סימן או קיצור, לדוגמה: £, CHF, ¥)"
+                " **איזה מטבע?**\n"
+                "(הכנס סימן או קיצור, לדוגמה: , CHF, )"
             )
             return ADD_CURRENCY
         else:
             context.user_data['currency'] = currency_map[query.data]
             await query.edit_message_text(
-                "📅 **באיזה תאריך בחודש יש חיוב?**\n\n"
+                " **באיזה תאריך בחודש יש חיוב?**\n\n"
                 "הכנס מספר בין 1-28\n"
                 "(לדוגמה: 15 = חמישה עשר בכל חודש)\n\n"
-                "💡 **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
+                " **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
             )
             return ADD_DATE
 
@@ -625,9 +625,9 @@ class SubscriberTrackingBot:
             return
         
         processing_msg = await update.message.reply_text(
-            "📸 **מעבד תמונה...**\n"
-            "🔍 מזהה טקסט\n"
-            "⏳ זה יקח רגע..."
+            " **מעבד תמונה...**\n"
+            " מזהה טקסט\n"
+            " זה יקח רגע..."
         )
         
         try:
@@ -655,21 +655,21 @@ class SubscriberTrackingBot:
                 await self.show_ocr_results(update, parsed_data, context)
             else:
                 await update.message.reply_text(
-                    "😅 **לא הצלחתי לזהות פרטי מנוי בתמונה**\n\n"
-                    "💡 **טיפים לצילום טוב יותר:**\n"
-                    "• ודא שהטקסט ברור וקריא\n"
-                    "• צלם ישר (ללא זווית)\n"
-                    "• הימנע מצללים\n"
-                    "• התמקד בחלק עם פרטי החיוב\n\n"
-                    "או השתמש ב-/add_subscription להוספה ידנית 📝"
+                    " **לא הצלחתי לזהות פרטי מנוי בתמונה**\n\n"
+                    " **טיפים לצילום טוב יותר:**\n"
+                    " ודא שהטקסט ברור וקריא\n"
+                    " צלם ישר (ללא זווית)\n"
+                    " הימנע מצללים\n"
+                    " התמקד בחלק עם פרטי החיוב\n\n"
+                    "או השתמש ב-/add_subscription להוספה ידנית "
                 )
                 
         except Exception as e:
             logger.error(f"OCR Error: {e}")
             await processing_msg.delete()
             await update.message.reply_text(
-                "❌ **שגיאה בעיבוד התמונה**\n\n"
-                "נסה שוב עם תמונה אחרת או השתמש ב-/add_subscription 📝"
+                " **שגיאה בעיבוד התמונה**\n\n"
+                "נסה שוב עם תמונה אחרת או השתמש ב-/add_subscription "
             )
 
     def enhance_image_for_ocr(self, image):
@@ -696,18 +696,18 @@ class SubscriberTrackingBot:
         
         # רגקסים מתקדמים לזיהוי סכומים
         amount_patterns = [
-            (r'(\d+\.?\d*)\s*₪', '₪', 0.9),
-            (r'(\d+\.?\d*)\s*שקל', '₪', 0.8),
+            (r'(\d+\.?\d*)\s*', '', 0.9),
+            (r'(\d+\.?\d*)\s*שקל', '', 0.8),
             (r'\$(\d+\.?\d*)', '$', 0.9),
             (r'(\d+\.?\d*)\s*usd', '$', 0.8),
-            (r'€(\d+\.?\d*)', '€', 0.9),
-            (r'(\d+\.?\d*)\s*eur', '€', 0.8),
-            (r'(\d+\.?\d*)\s*nis', '₪', 0.7)
+            (r'(\d+\.?\d*)', '', 0.9),
+            (r'(\d+\.?\d*)\s*eur', '', 0.8),
+            (r'(\d+\.?\d*)\s*nis', '', 0.7)
         ]
         
         # זיהוי סכום ומטבע
         amount = None
-        currency = '₪'
+        currency = ''
         amount_confidence = 0.0
         
         for pattern, curr, conf in amount_patterns:
@@ -777,26 +777,26 @@ class SubscriberTrackingBot:
         """הצגת תוצאות OCR למשתמש"""
         service = parsed_data.get('service', 'לא זוהה')
         amount = parsed_data.get('amount', 'לא זוהה')
-        currency = parsed_data.get('currency', '₪')
+        currency = parsed_data.get('currency', '')
         confidence = parsed_data.get('confidence', 0)
         
-        confidence_emoji = "🎯" if confidence > 0.8 else "🔍" if confidence > 0.6 else "❓"
+        confidence_emoji = "" if confidence > 0.8 else "" if confidence > 0.6 else ""
         
         confirmation_text = f"""
 {confidence_emoji} **זיהוי אוטומטי מהתמונה**
 
-📱 **שירות:** {service}
-💰 **סכום:** {amount} {currency}
-📊 **רמת ביטחון:** {confidence*100:.0f}%
+ **שירות:** {service}
+ **סכום:** {amount} {currency}
+ **רמת ביטחון:** {confidence*100:.0f}%
 
 **האם הפרטים נכונים?**
         """
         
         keyboard = [
-            [InlineKeyboardButton("✅ נכון! הוסף מנוי", callback_data=f"ocr_confirm_{service}_{amount}_{currency}")],
-            [InlineKeyboardButton("✏️ ערוך פרטים", callback_data="ocr_edit")],
-            [InlineKeyboardButton("🔄 נסה שוב", callback_data="ocr_retry")],
-            [InlineKeyboardButton("❌ ביטול", callback_data="ocr_cancel")]
+            [InlineKeyboardButton(" נכון! הוסף מנוי", callback_data=f"ocr_confirm_{service}_{amount}_{currency}")],
+            [InlineKeyboardButton(" ערוך פרטים", callback_data="ocr_edit")],
+            [InlineKeyboardButton(" נסה שוב", callback_data="ocr_retry")],
+            [InlineKeyboardButton(" ביטול", callback_data="ocr_cancel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -825,10 +825,10 @@ class SubscriberTrackingBot:
         
         if not subscriptions:
             await update.message.reply_text(
-                "📭 **אין לך מנויים רשומים עדיין**\n\n"
-                "🚀 **התחל עכשיו:**\n"
+                " **אין לך מנויים רשומים עדיין**\n\n"
+                " **התחל עכשיו:**\n"
                 "/add_subscription - הוסף מנוי ראשון\n"
-                "או שלח צילום מסך של חיוב לזיהוי אוטומטי! 📸"
+                "או שלח צילום מסך של חיוב לזיהוי אוטומטי! "
             )
             return
         
@@ -837,13 +837,13 @@ class SubscriberTrackingBot:
         total_yearly = total_monthly * 12
         
         header_text = f"""
-📱 **המנויים שלך ({len(subscriptions)} פעילים)**
+ **המנויים שלך ({len(subscriptions)} פעילים)**
 
-💰 **סיכום הוצאות:**
-• חודשי: ₪{total_monthly:.2f}
-• שנתי: ₪{total_yearly:.2f}
+ **סיכום הוצאות:**
+ חודשי: {total_monthly:.2f}
+ שנתי: {total_yearly:.2f}
 
-📋 **רשימת מנויים:**
+ **רשימת מנויים:**
         """
         
         # בניית רשימת המנויים
@@ -851,18 +851,18 @@ class SubscriberTrackingBot:
         for i, (sub_id, service, amount, currency, billing_day, category, notes, created_at) in enumerate(subscriptions, 1):
             category_emoji = self.get_category_emoji(category)
             subscriptions_text += f"\n{i}. {category_emoji} **{service}**\n"
-            subscriptions_text += f"   💰 {amount} {currency} • 📅 {billing_day} בחודש\n"
-            subscriptions_text += f"   /edit_{sub_id} • /delete_{sub_id}\n"
+            subscriptions_text += f"    {amount} {currency}   {billing_day} בחודש\n"
+            subscriptions_text += f"   /edit_{sub_id}  /delete_{sub_id}\n"
         
         full_text = header_text + subscriptions_text
         
         # הוספת כפתורי פעולה
         keyboard = [
-            [InlineKeyboardButton("➕ הוסף מנוי", callback_data="quick_add")],
-            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats"), 
-             InlineKeyboardButton("📈 ניתוח", callback_data="analytics")],
-            [InlineKeyboardButton("📅 תשלומים קרובים", callback_data="upcoming"),
-             InlineKeyboardButton("⚙️ הגדרות", callback_data="settings")]
+            [InlineKeyboardButton(" הוסף מנוי", callback_data="quick_add")],
+            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats"), 
+             InlineKeyboardButton(" ניתוח", callback_data="analytics")],
+            [InlineKeyboardButton(" תשלומים קרובים", callback_data="upcoming"),
+             InlineKeyboardButton(" הגדרות", callback_data="settings")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -871,20 +871,20 @@ class SubscriberTrackingBot:
     def get_category_emoji(self, category):
         """החזרת אמוג'י לפי קטגוריה"""
         emoji_map = {
-            'streaming': '📺',
-            'music': '🎵',
-            'productivity': '⚡',
-            'cloud': '☁️',
-            'software': '💻',
-            'gaming': '🎮',
-            'news': '📰',
-            'fitness': '💪',
-            'education': '📚',
-            'communication': '💬',
-            'financial': '💳',
-            'other': '📦'
+            'streaming': '',
+            'music': '',
+            'productivity': '',
+            'cloud': '',
+            'software': '',
+            'gaming': '',
+            'news': '',
+            'fitness': '',
+            'education': '',
+            'communication': '',
+            'financial': '',
+            'other': ''
         }
-        return emoji_map.get(category, '📦')
+        return emoji_map.get(category, '')
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """הצגת סטטיסטיקות מנויים"""
@@ -923,45 +923,45 @@ class SubscriberTrackingBot:
         conn.close()
         
         if total_subs == 0:
-            await update.message.reply_text("📊 אין נתונים להצגה. הוסף מנויים תחילה!")
+            await update.message.reply_text(" אין נתונים להצגה. הוסף מנויים תחילה!")
             return
         
         yearly_total = monthly_total * 12
         average_sub = monthly_total / total_subs if total_subs > 0 else 0
         
         stats_text = f"""
-📊 **סטטיסטיקות המנויים שלך**
+ **סטטיסטיקות המנויים שלך**
 
-📈 **סיכום כספי:**
-• מנויים פעילים: {total_subs}
-• הוצאה חודשית: ₪{monthly_total:.2f}
-• הוצאה שנתית: ₪{yearly_total:.2f}
-• ממוצע למנוי: ₪{average_sub:.2f}
+ **סיכום כספי:**
+ מנויים פעילים: {total_subs}
+ הוצאה חודשית: {monthly_total:.2f}
+ הוצאה שנתית: {yearly_total:.2f}
+ ממוצע למנוי: {average_sub:.2f}
 
-📊 **פילוח לפי קטגוריות:**
+ **פילוח לפי קטגוריות:**
         """
         
         for category, count, amount in categories:
             emoji = self.get_category_emoji(category)
             percentage = (amount / monthly_total * 100) if monthly_total > 0 else 0
-            stats_text += f"{emoji} {category}: {count} מנויים • ₪{amount:.2f} ({percentage:.1f}%)\n"
+            stats_text += f"{emoji} {category}: {count} מנויים  {amount:.2f} ({percentage:.1f}%)\n"
         
         if len(currencies) > 1:
-            stats_text += f"\n💱 **פילוח לפי מטבע:**\n"
+            stats_text += f"\n **פילוח לפי מטבע:**\n"
             for currency, count, amount in currencies:
-                stats_text += f"{currency}: {count} מנויים • {amount:.2f}\n"
+                stats_text += f"{currency}: {count} מנויים  {amount:.2f}\n"
         
         # הוספת תובנות
-        stats_text += f"\n💡 **תובנות:**\n"
+        stats_text += f"\n **תובנות:**\n"
         if yearly_total > 1000:
-            stats_text += f"• אתה מוציא מעל ₪1,000 בשנה על מנויים!\n"
+            stats_text += f" אתה מוציא מעל 1,000 בשנה על מנויים!\n"
         if total_subs > 5:
-            stats_text += f"• יש לך {total_subs} מנויים - שקול לבדוק אילו אתה באמת משתמש\n"
+            stats_text += f" יש לך {total_subs} מנויים - שקול לבדוק אילו אתה באמת משתמש\n"
         
         keyboard = [
-            [InlineKeyboardButton("📈 ניתוח מתקדם", callback_data="analytics")],
-            [InlineKeyboardButton("📅 תשלומים קרובים", callback_data="upcoming")],
-            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+            [InlineKeyboardButton(" ניתוח מתקדם", callback_data="analytics")],
+            [InlineKeyboardButton(" תשלומים קרובים", callback_data="upcoming")],
+            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -986,20 +986,20 @@ class SubscriberTrackingBot:
         conn.close()
         
         if not subscriptions:
-            await update.message.reply_text("📈 אין מנויים לניתוח. הוסף מנויים תחילה!")
+            await update.message.reply_text(" אין מנויים לניתוח. הוסף מנויים תחילה!")
             return
         
         total_monthly = sum(sub[1] for sub in subscriptions)
         
         analytics_text = f"""
-📈 **ניתוח מתקדם - Subscriber_tracking**
+ **ניתוח מתקדם - Subscriber_tracking**
 
-💰 **ניתוח כספי:**
-• הוצאה חודשית: ₪{total_monthly:.2f}
-• הוצאה שנתית: ₪{total_monthly * 12:.2f}
-• כ-{(total_monthly / 10000 * 100):.1f}% מהכנסה ממוצעת
+ **ניתוח כספי:**
+ הוצאה חודשית: {total_monthly:.2f}
+ הוצאה שנתית: {total_monthly * 12:.2f}
+ כ-{(total_monthly / 10000 * 100):.1f}% מהכנסה ממוצעת
 
-🎯 **המלצות חיסכון:**
+ **המלצות חיסכון:**
         """
         
         # המלצות מותאמות אישית
@@ -1008,12 +1008,12 @@ class SubscriberTrackingBot:
         # בדיקת מנויים יקרים
         expensive_subs = [sub for sub in subscriptions if sub[1] > 50]
         if expensive_subs:
-            recommendations.append(f"💸 יש לך {len(expensive_subs)} מנויים יקרים - שקול חלופות זולות יותר")
+            recommendations.append(f" יש לך {len(expensive_subs)} מנויים יקרים - שקול חלופות זולות יותר")
         
         # בדיקת מנויים דומים
         streaming_subs = [sub for sub in subscriptions if sub[3] == 'streaming']
         if len(streaming_subs) > 2:
-            recommendations.append(f"📺 {len(streaming_subs)} שירותי סטרימינג - אולי אפשר להסתפק בפחות?")
+            recommendations.append(f" {len(streaming_subs)} שירותי סטרימינג - אולי אפשר להסתפק בפחות?")
         
         # בדיקת מנויים ישנים
         old_subs = []
@@ -1028,10 +1028,10 @@ class SubscriberTrackingBot:
                 pass
         
         if old_subs:
-            recommendations.append(f"📅 יש לך {len(old_subs)} מנויים מעל 6 חודשים - מתי בדקת אותם לאחרונה?")
+            recommendations.append(f" יש לך {len(old_subs)} מנויים מעל 6 חודשים - מתי בדקת אותם לאחרונה?")
         
         if not recommendations:
-            recommendations.append("✅ נראה שאתה מנהל היטב את המנויים שלך!")
+            recommendations.append(" נראה שאתה מנהל היטב את המנויים שלך!")
         
         for i, rec in enumerate(recommendations, 1):
             analytics_text += f"{i}. {rec}\n"
@@ -1044,21 +1044,21 @@ class SubscriberTrackingBot:
             potential_savings += len(expensive_subs) * 20  # הנחת חיסכון ממוצעת
         
         if potential_savings > 0:
-            analytics_text += f"\n💡 **פוטנציאל חיסכון:** עד ₪{potential_savings:.0f} בחודש!"
+            analytics_text += f"\n **פוטנציאל חיסכון:** עד {potential_savings:.0f} בחודש!"
         
-        analytics_text += f"\n📊 **השוואה:**\n"
-        analytics_text += f"• ממוצע ישראלי: ~₪180 בחודש\n"
-        analytics_text += f"• המנויים שלך: ₪{total_monthly:.2f}\n"
+        analytics_text += f"\n **השוואה:**\n"
+        analytics_text += f" ממוצע ישראלי: ~180 בחודש\n"
+        analytics_text += f" המנויים שלך: {total_monthly:.2f}\n"
         
         if total_monthly > 180:
-            analytics_text += f"• אתה מעל הממוצע ב-₪{total_monthly - 180:.2f} 📈"
+            analytics_text += f" אתה מעל הממוצע ב-{total_monthly - 180:.2f} "
         else:
-            analytics_text += f"• אתה מתחת לממוצע! חיסכון של ₪{180 - total_monthly:.2f} 💪"
+            analytics_text += f" אתה מתחת לממוצע! חיסכון של {180 - total_monthly:.2f} "
         
         keyboard = [
-            [InlineKeyboardButton("💰 טיפים לחיסכון", callback_data="savings_tips")],
-            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")],
-            [InlineKeyboardButton("📋 המנויים שלי", callback_data="my_subs")]
+            [InlineKeyboardButton(" טיפים לחיסכון", callback_data="savings_tips")],
+            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")],
+            [InlineKeyboardButton(" המנויים שלי", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1085,13 +1085,13 @@ class SubscriberTrackingBot:
         conn.close()
         
         if not categories:
-            await update.message.reply_text("📦 אין מנויים לפי קטגוריות. הוסף מנויים תחילה!")
+            await update.message.reply_text(" אין מנויים לפי קטגוריות. הוסף מנויים תחילה!")
             return
         
         categories_text = f"""
-📦 **ניהול קטגוריות - {len(categories)} קטגוריות**
+ **ניהול קטגוריות - {len(categories)} קטגוריות**
 
-📊 **פילוח הוצאות לפי קטגוריה:**
+ **פילוח הוצאות לפי קטגוריה:**
         """
         
         total_amount = sum(cat[2] for cat in categories)
@@ -1100,16 +1100,16 @@ class SubscriberTrackingBot:
             emoji = self.get_category_emoji(category)
             percentage = (amount / total_amount * 100) if total_amount > 0 else 0
             categories_text += f"\n{emoji} **{category.title()}**\n"
-            categories_text += f"   • {count} מנויים • ₪{amount:.2f} ({percentage:.1f}%)\n"
-            categories_text += f"   • ממוצע: ₪{avg_amount:.2f} למנוי\n"
+            categories_text += f"    {count} מנויים  {amount:.2f} ({percentage:.1f}%)\n"
+            categories_text += f"    ממוצע: {avg_amount:.2f} למנוי\n"
         
-        categories_text += f"\n💡 **הקטגוריה היקרה ביותר:** {categories[0][0].title()}"
-        categories_text += f"\n📊 **הקטגוריה הפופולרית ביותר:** {max(categories, key=lambda x: x[1])[0].title()}"
+        categories_text += f"\n **הקטגוריה היקרה ביותר:** {categories[0][0].title()}"
+        categories_text += f"\n **הקטגוריה הפופולרית ביותר:** {max(categories, key=lambda x: x[1])[0].title()}"
         
         keyboard = [
-            [InlineKeyboardButton("📊 סטטיסטיקות מלאות", callback_data="stats")],
-            [InlineKeyboardButton("📈 ניתוח מתקדם", callback_data="analytics")],
-            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+            [InlineKeyboardButton(" סטטיסטיקות מלאות", callback_data="stats")],
+            [InlineKeyboardButton(" ניתוח מתקדם", callback_data="analytics")],
+            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1134,7 +1134,7 @@ class SubscriberTrackingBot:
         conn.close()
         
         if not subscriptions:
-            await update.message.reply_text("📅 אין מנויים פעילים לתצוגת תשלומים קרובים.")
+            await update.message.reply_text(" אין מנויים פעילים לתצוגת תשלומים קרובים.")
             return
         
         from datetime import datetime, timedelta
@@ -1144,9 +1144,9 @@ class SubscriberTrackingBot:
         current_year = datetime.now().year
         
         upcoming_text = f"""
-📅 **תשלומים קרובים (30 יום)**
+ **תשלומים קרובים (30 יום)**
 
-⏰ **היום: {today}/{current_month}**
+ **היום: {today}/{current_month}**
         """
         
         upcoming_subs = []
@@ -1173,27 +1173,27 @@ class SubscriberTrackingBot:
         upcoming_subs.sort(key=lambda x: x[0])
         
         if not upcoming_subs:
-            upcoming_text += "\n✅ אין תשלומים ב-30 הימים הקרובים!"
+            upcoming_text += "\n אין תשלומים ב-30 הימים הקרובים!"
         else:
-            upcoming_text += f"\n💰 **סך תשלומים צפויים:** ₪{total_upcoming:.2f}\n"
+            upcoming_text += f"\n **סך תשלומים צפויים:** {total_upcoming:.2f}\n"
             
             for days, service, amount, currency, emoji, next_date in upcoming_subs:
                 if days == 0:
-                    upcoming_text += f"\n🚨 **היום:** {emoji} {service} - {amount} {currency}"
+                    upcoming_text += f"\n **היום:** {emoji} {service} - {amount} {currency}"
                 elif days == 1:
-                    upcoming_text += f"\n⚠️ **מחר:** {emoji} {service} - {amount} {currency}"
+                    upcoming_text += f"\n **מחר:** {emoji} {service} - {amount} {currency}"
                 elif days <= 7:
-                    upcoming_text += f"\n🔔 **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
+                    upcoming_text += f"\n **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
                 else:
-                    upcoming_text += f"\n📌 **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
+                    upcoming_text += f"\n **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
         
         # הוספת טיפים
-        upcoming_text += f"\n\n💡 **טיפ:** בדוק אילו מנויים אתה באמת משתמש לפני התחדשותם!"
+        upcoming_text += f"\n\n **טיפ:** בדוק אילו מנויים אתה באמת משתמש לפני התחדשותם!"
         
         keyboard = [
-            [InlineKeyboardButton("📋 כל המנויים", callback_data="my_subs")],
-            [InlineKeyboardButton("⚙️ הגדרת התראות", callback_data="settings")],
-            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")]
+            [InlineKeyboardButton(" כל המנויים", callback_data="my_subs")],
+            [InlineKeyboardButton(" הגדרת התראות", callback_data="settings")],
+            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1218,7 +1218,7 @@ class SubscriberTrackingBot:
         conn.close()
         
         if not subscriptions:
-            await update.message.reply_text("📤 אין נתונים לייצוא. הוסף מנויים תחילה!")
+            await update.message.reply_text(" אין נתונים לייצוא. הוסף מנויים תחילה!")
             return
         
         # יצירת נתונים בפורמט CSV
@@ -1231,22 +1231,22 @@ class SubscriberTrackingBot:
         # יצירת סיכום
         total_monthly = sum(sub[1] for sub in subscriptions)
         summary = f"""
-📤 **ייצוא נתונים הושלם**
+ **ייצוא נתונים הושלם**
 
-📊 **סיכום:**
-• {len(subscriptions)} מנויים פעילים
-• הוצאה חודשית: ₪{total_monthly:.2f}
-• הוצאה שנתית: ₪{total_monthly * 12:.2f}
+ **סיכום:**
+ {len(subscriptions)} מנויים פעילים
+ הוצאה חודשית: {total_monthly:.2f}
+ הוצאה שנתית: {total_monthly * 12:.2f}
 
-📋 **הנתונים:**
+ **הנתונים:**
 {csv_content}
 
-💾 **הנתונים מוכנים להעתקה ושמירה כקובץ CSV**
+ **הנתונים מוכנים להעתקה ושמירה כקובץ CSV**
         """
         
         keyboard = [
-            [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")],
-            [InlineKeyboardButton("📋 רשימת מנויים", callback_data="my_subs")]
+            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")],
+            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1267,32 +1267,32 @@ class SubscriberTrackingBot:
         
         if not settings:
             self.ensure_user_settings(user_id)
-            settings = (user_id, 'Asia/Jerusalem', '09:00', 'he', '₪', 1, 1, None, None)
+            settings = (user_id, 'Asia/Jerusalem', '09:00', 'he', '', 1, 1, None, None)
         
         settings_text = f"""
-⚙️ **הגדרות Subscriber_tracking**
+ **הגדרות Subscriber_tracking**
 
-🔔 **התראות:**
-• שעת התראה: {settings[2]}
-• התראות שבועיות: {'פעיל' if settings[5] else 'כבוי'}
+ **התראות:**
+ שעת התראה: {settings[2]}
+ התראות שבועיות: {'פעיל' if settings[5] else 'כבוי'}
 
-🌍 **הגדרות כלליות:**
-• אזור זמן: {settings[1]}
-• שפה: {settings[3]}
-• מטבע מועדף: {settings[4]}
+ **הגדרות כלליות:**
+ אזור זמן: {settings[1]}
+ שפה: {settings[3]}
+ מטבע מועדף: {settings[4]}
 
-🤖 **פיצ'רים חכמים:**
-• המלצות חכמות: {'פעיל' if settings[6] else 'כבוי'}
-• OCR (זיהוי מתמונות): {'פעיל' if Config.ENABLE_OCR else 'כבוי'}
+ **פיצ'רים חכמים:**
+ המלצות חכמות: {'פעיל' if settings[6] else 'כבוי'}
+ OCR (זיהוי מתמונות): {'פעיל' if Config.ENABLE_OCR else 'כבוי'}
 
-💡 **טיפ:** הגדרות אלו משפיעות על חוויית השימוש שלך
+ **טיפ:** הגדרות אלו משפיעות על חוויית השימוש שלך
         """
         
         keyboard = [
-            [InlineKeyboardButton("🔔 שינוי שעת התראה", callback_data="settings_notifications")],
-            [InlineKeyboardButton("💱 שינוי מטבע", callback_data="settings_currency")],
-            [InlineKeyboardButton("🤖 פיצ'רים חכמים", callback_data="settings_features")],
-            [InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]
+            [InlineKeyboardButton(" שינוי שעת התראה", callback_data="settings_notifications")],
+            [InlineKeyboardButton(" שינוי מטבע", callback_data="settings_currency")],
+            [InlineKeyboardButton(" פיצ'רים חכמים", callback_data="settings_features")],
+            [InlineKeyboardButton(" חזרה", callback_data="main_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1317,30 +1317,30 @@ class SubscriberTrackingBot:
         conn.close()
         
         if not subscription:
-            await update.message.reply_text("❌ מנוי לא נמצא או שאין לך הרשאה לערוך אותו.")
+            await update.message.reply_text(" מנוי לא נמצא או שאין לך הרשאה לערוך אותו.")
             return
         
         service, amount, currency, billing_day, category, notes = subscription
         notes = notes or "אין הערות"
         
         edit_text = f"""
-✏️ **עריכת מנוי: {service}**
+ **עריכת מנוי: {service}**
 
-📋 **פרטים נוכחיים:**
-• 💰 סכום: {amount} {currency}
-• 📅 יום חיוב: {billing_day}
-• 📦 קטגוריה: {category}
-• 📝 הערות: {notes}
+ **פרטים נוכחיים:**
+  סכום: {amount} {currency}
+  יום חיוב: {billing_day}
+  קטגוריה: {category}
+  הערות: {notes}
 
 **מה תרצה לערוך?**
         """
         
         keyboard = [
-            [InlineKeyboardButton("💰 סכום", callback_data=f"edit_amount_{sub_id}")],
-            [InlineKeyboardButton("📅 יום חיוב", callback_data=f"edit_billing_{sub_id}")],
-            [InlineKeyboardButton("📦 קטגוריה", callback_data=f"edit_category_{sub_id}")],
-            [InlineKeyboardButton("📝 הערות", callback_data=f"edit_notes_{sub_id}")],
-            [InlineKeyboardButton("🔙 חזרה למנויים", callback_data="my_subs")]
+            [InlineKeyboardButton(" סכום", callback_data=f"edit_amount_{sub_id}")],
+            [InlineKeyboardButton(" יום חיוב", callback_data=f"edit_billing_{sub_id}")],
+            [InlineKeyboardButton(" קטגוריה", callback_data=f"edit_category_{sub_id}")],
+            [InlineKeyboardButton(" הערות", callback_data=f"edit_notes_{sub_id}")],
+            [InlineKeyboardButton(" חזרה למנויים", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1365,24 +1365,24 @@ class SubscriberTrackingBot:
         
         if not subscription:
             conn.close()
-            await update.message.reply_text("❌ מנוי לא נמצא או שאין לך הרשאה למחוק אותו.")
+            await update.message.reply_text(" מנוי לא נמצא או שאין לך הרשאה למחוק אותו.")
             return
         
         service, amount, currency = subscription
         
         delete_text = f"""
-🗑️ **מחיקת מנוי**
+ **מחיקת מנוי**
 
-⚠️ **אתה עומד למחוק:**
-📱 **שירות:** {service}
-💰 **סכום:** {amount} {currency}
+ **אתה עומד למחוק:**
+ **שירות:** {service}
+ **סכום:** {amount} {currency}
 
 **האם אתה בטוח? הפעולה בלתי הפיכה!**
         """
         
         keyboard = [
-            [InlineKeyboardButton("✅ כן, מחק", callback_data=f"confirm_delete_{sub_id}")],
-            [InlineKeyboardButton("❌ ביטול", callback_data="my_subs")]
+            [InlineKeyboardButton(" כן, מחק", callback_data=f"confirm_delete_{sub_id}")],
+            [InlineKeyboardButton(" ביטול", callback_data="my_subs")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1392,8 +1392,8 @@ class SubscriberTrackingBot:
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """ביטול פעולה נוכחית"""
         await update.message.reply_text(
-            "❌ **פעולה בוטלה**\n\n"
-            "🏠 חזרה לתפריט הראשי:\n"
+            " **פעולה בוטלה**\n\n"
+            " חזרה לתפריט הראשי:\n"
             "/start - תפריט ראשי\n"
             "/my_subs - המנויים שלי\n"
             "/help - עזרה"
@@ -1408,19 +1408,19 @@ class SubscriberTrackingBot:
         # בדיקה שהמטבע לא ריק ולא ארוך מדי
         if not currency_input or len(currency_input) > 5:
             await update.message.reply_text(
-                "❌ מטבע לא חוקי. נסה שוב:\n"
-                "(לדוגמה: £, CHF, ¥, RUB)"
+                " מטבע לא חוקי. נסה שוב:\n"
+                "(לדוגמה: , CHF, , RUB)"
             )
             return ADD_CURRENCY
         
         context.user_data['currency'] = currency_input
         
         await update.message.reply_text(
-            f"✅ **מטבע נשמר:** {currency_input}\n\n"
-            "📅 **באיזה תאריך בחודש יש חיוב?**\n\n"
+            f" **מטבע נשמר:** {currency_input}\n\n"
+            " **באיזה תאריך בחודש יש חיוב?**\n\n"
             "הכנס מספר בין 1-28\n"
             "(לדוגמה: 15 = חמישה עשר בכל חודש)\n\n"
-            "💡 **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
+            " **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
         )
         return ADD_DATE
 
@@ -1431,7 +1431,7 @@ class SubscriberTrackingBot:
             
             if not 1 <= billing_day <= 28:
                 await update.message.reply_text(
-                    "❌ תאריך לא חוקי. הכנס מספר בין 1-28:\n"
+                    " תאריך לא חוקי. הכנס מספר בין 1-28:\n"
                     "(לדוגמה: 15 לחמישה עשר בחודש)"
                 )
                 return ADD_DATE
@@ -1458,22 +1458,22 @@ class SubscriberTrackingBot:
             self.log_user_action(user_id, "subscription_added", metadata=f"{service_name}_{amount}_{currency}")
             
             success_text = f"""
-✅ **מנוי נוסף בהצלחה!**
+ **מנוי נוסף בהצלחה!**
 
-📱 **שירות:** {service_name}
-💰 **סכום:** {amount} {currency}
-📅 **יום חיוב:** {billing_day} בכל חודש
-📦 **קטגוריה:** {category}
+ **שירות:** {service_name}
+ **סכום:** {amount} {currency}
+ **יום חיוב:** {billing_day} בכל חודש
+ **קטגוריה:** {category}
 
-🔔 **תזכורות:** תקבל התראה שבוע ויום לפני כל חיוב
+ **תזכורות:** תקבל התראה שבוע ויום לפני כל חיוב
 
-🎯 **מה הלאה?**
+ **מה הלאה?**
             """
             
             keyboard = [
-                [InlineKeyboardButton("📋 ראה את כל המנויים", callback_data="my_subs")],
-                [InlineKeyboardButton("➕ הוסף מנוי נוסף", callback_data="quick_add")],
-                [InlineKeyboardButton("📊 סטטיסטיקות", callback_data="stats")]
+                [InlineKeyboardButton(" ראה את כל המנויים", callback_data="my_subs")],
+                [InlineKeyboardButton(" הוסף מנוי נוסף", callback_data="quick_add")],
+                [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -1485,7 +1485,7 @@ class SubscriberTrackingBot:
             
         except ValueError:
             await update.message.reply_text(
-                "❌ נסה להכניס מספר חוקי בין 1-28:\n"
+                " נסה להכניס מספר חוקי בין 1-28:\n"
                 "(לדוגמה: 15)"
             )
             return ADD_DATE
@@ -1493,47 +1493,47 @@ class SubscriberTrackingBot:
     async def handle_screenshot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """טיפול בצילום מסך ללא OCR"""
         await update.message.reply_text(
-            "📸 **קיבלתי את התמונה!**\n\n"
-            "🔍 **זיהוי אוטומטי לא זמין כרגע**\n"
+            " **קיבלתי את התמונה!**\n\n"
+            " **זיהוי אוטומטי לא זמין כרגע**\n"
             "השתמש ב-/add_subscription להוספה ידנית\n\n"
-            "💡 **טיפ:** אם יש לך פרטי החיוב, אני יכול לעזור לך להוסיף אותם במהירות!"
+            " **טיפ:** אם יש לך פרטי החיוב, אני יכול לעזור לך להוסיף אותם במהירות!"
         )
 
     async def handle_quick_actions(self, query, context):
         """טיפול בפעולות מהירות"""
         if query.data == "quick_add":
             await query.edit_message_text(
-                "📝 **הוספת מנוי מהירה**\n\n"
+                " **הוספת מנוי מהירה**\n\n"
                 "לחץ על /add_subscription להתחלת התהליך המלא\n"
-                "או שלח צילום מסך לזיהוי אוטומטי! 📸"
+                "או שלח צילום מסך לזיהוי אוטומטי! "
             )
         elif query.data == "demo":
             demo_text = """
-🎯 **דמו - Subscriber_tracking Bot**
+ **דמו - Subscriber_tracking Bot**
 
 **מה אני יכול לעשות בשבילך:**
 
-📱 **ניהול מנויים:**
-• הוספה קלה עם /add_subscription
-• צפייה בכל המנויים עם /my_subs
-• עריכה ומחיקה פשוטה
+ **ניהול מנויים:**
+ הוספה קלה עם /add_subscription
+ צפייה בכל המנויים עם /my_subs
+ עריכה ומחיקה פשוטה
 
-📊 **ניתוח והתובנות:**
-• סטטיסטיקות מפורטות (/stats)
-• ניתוח חכם והמלצות (/analytics)
-• תשלומים קרובים (/upcoming)
+ **ניתוח והתובנות:**
+ סטטיסטיקות מפורטות (/stats)
+ ניתוח חכם והמלצות (/analytics)
+ תשלומים קרובים (/upcoming)
 
-🔔 **תזכורות אוטומטיות:**
-• שבוע לפני כל חיוב
-• יום לפני כל חיוב
-• ניתן להתאים בהגדרות
+ **תזכורות אוטומטיות:**
+ שבוע לפני כל חיוב
+ יום לפני כל חיוב
+ ניתן להתאים בהגדרות
 
-✨ **פיצ'רים חכמים:**
-• זיהוי אוטומטי מצילומי מסך
-• זיהוי קטגוריות אוטומטי
-• המלצות חיסכון מותאמות
+ **פיצ'רים חכמים:**
+ זיהוי אוטומטי מצילומי מסך
+ זיהוי קטגוריות אוטומטי
+ המלצות חיסכון מותאמות
 
-🚀 **מוכן להתחיל? לחץ /add_subscription**
+ **מוכן להתחיל? לחץ /add_subscription**
             """
             await query.edit_message_text(demo_text)
         else:
@@ -1554,24 +1554,24 @@ class SubscriberTrackingBot:
             context.user_data['currency'] = currency
             
             await query.edit_message_text(
-                f"✅ **מאושר!**\n\n"
-                f"📱 {service}\n💰 {amount} {currency}\n\n"
-                "📅 **באיזה תאריך בחודש יש חיוב?** (1-28)"
+                f" **מאושר!**\n\n"
+                f" {service}\n {amount} {currency}\n\n"
+                " **באיזה תאריך בחודש יש חיוב?** (1-28)"
             )
         elif query.data == "ocr_edit":
             await query.edit_message_text(
-                "✏️ **עריכת פרטים**\n\n"
+                " **עריכת פרטים**\n\n"
                 "השתמש ב-/add_subscription להוספה ידנית\n"
                 "כך תוכל לעדכן את כל הפרטים לפי הצורך."
             )
         elif query.data == "ocr_retry":
             await query.edit_message_text(
-                "🔄 **נסה שוב**\n\n"
+                " **נסה שוב**\n\n"
                 "שלח צילום מסך נוסף או השתמש ב-/add_subscription להוספה ידנית."
             )
         elif query.data == "ocr_cancel":
             await query.edit_message_text(
-                "❌ **פעולה בוטלה**\n\n"
+                " **פעולה בוטלה**\n\n"
                 "לחץ /start לחזרה לתפריט הראשי"
             )
 
@@ -1596,37 +1596,37 @@ class SubscriberTrackingBot:
 
     async def run(self):
     """הפעלת Subscriber_tracking Bot ב-Render"""
-    logger.info("🤖 Subscriber_tracking Bot starting on Render...")
-    logger.info(f"📋 Version: {self.bot_info['version']}")
-    logger.info(f"🗄️ Database: {Config.DATABASE_PATH}")
-    logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-    logger.info(f"🌐 Port: {Config.PORT}")
-    logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
+    logger.info(" Subscriber_tracking Bot starting on Render...")
+    logger.info(f" Version: {self.bot_info['version']}")
+    logger.info(f" Database: {Config.DATABASE_PATH}")
+    logger.info(f" Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
+    logger.info(f" Port: {Config.PORT}")
+    logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
 
-    # ⏰ הפעל את המתזמן אם הוא מאותחל
+    #  הפעל את המתזמן אם הוא מאותחל
     if self.scheduler:
         try:
             self.scheduler.start()
-            logger.info("⏰ Scheduler started")
+            logger.info(" Scheduler started")
         except Exception as e:
-            logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+            logger.warning(f" Scheduler couldn't start: {e}")
     else:
-        logger.warning("⚠️ Scheduler is None")
+        logger.warning(" Scheduler is None")
 
-    # ▶️ הפעל את הבוט ב־polling אם app קיים
+    #  הפעל את הבוט ב־polling אם app קיים
     if self.app:
         try:
-            logger.info("🚀 Starting bot polling...")
+            logger.info(" Starting bot polling...")
             await self.app.run_polling()
         except Exception as e:
-            logger.error(f"❌ Bot polling failed: {e}")
+            logger.error(f" Bot polling failed: {e}")
     else:
-        logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+        logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
 
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
         try:
-            logger.info("🔍 Checking for notifications to send...")
+            logger.info(" Checking for notifications to send...")
             conn = sqlite3.connect("database.db")
             cursor = conn.cursor()
             today = datetime.now().date()
@@ -1641,7 +1641,7 @@ class SubscriberTrackingBot:
 
             notifications = cursor.fetchall()
             if notifications:
-                logger.info(f"📤 Found {len(notifications)} notifications to send")
+                logger.info(f" Found {len(notifications)} notifications to send")
 
             for n in notifications:
                 notif_id, _, notif_type, user_id, name, amount, currency = n
@@ -1651,16 +1651,16 @@ class SubscriberTrackingBot:
                     'currency': currency
                 }, notif_type)
                 cursor.execute('UPDATE notifications SET sent = 1 WHERE id = ?', (notif_id,))
-                logger.info(f"✅ Notification sent to user {user_id} for {name}")
+                logger.info(f" Notification sent to user {user_id} for {name}")
 
             conn.commit()
             conn.close()
 
             if not notifications:
-                logger.info("📭 No notifications to send today")
+                logger.info(" No notifications to send today")
 
         except Exception as e:
-            logger.error(f"❌ Error in notification check: {e}")
+            logger.error(f" Error in notification check: {e}")
 
     async def send_notification(self, user_id: int, subscription_data: dict, notification_type: str):
         name = subscription_data['service_name']
@@ -1668,19 +1668,19 @@ class SubscriberTrackingBot:
         currency = subscription_data['currency']
 
         if notification_type == 'week_before':
-            message = f"⏰ תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n💰 סכום: {amount} {currency}"
+            message = f" תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n סכום: {amount} {currency}"
         elif notification_type == 'day_before':
-            message = f"🚨 תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
+            message = f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
 
         try:
             await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
-            logger.info(f"📤 Notification sent successfully to user {user_id}")
+            logger.info(f" Notification sent successfully to user {user_id}")
         except Exception as e:
-            logger.error(f"❌ Failed to send notification to user {user_id}: {e}")
+            logger.error(f" Failed to send notification to user {user_id}: {e}")
 
 # טיפול בסיגנלים ל־Render
 def signal_handler(sig, frame):
-    logger.info("🛑 Received shutdown signal, gracefully stopping...")
+    logger.info(" Received shutdown signal, gracefully stopping...")
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -1696,6 +1696,6 @@ def get_telegram_app():
 
 if __name__ == "__main__":
     import asyncio
-    print("🎯 Starting Subscriber_tracking Bot...")
+    print(" Starting Subscriber_tracking Bot...")
     bot = SubscriberTrackingBot()
     asyncio.run(bot.run())
