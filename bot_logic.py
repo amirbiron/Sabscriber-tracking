@@ -1578,56 +1578,11 @@ class SubscriberTrackingBot:
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
 
-import logging
-import signal
-import sys
-import sqlite3
-from datetime import datetime
-from apscheduler.triggers.cron import CronTrigger
-
-logger = logging.getLogger(__name__)
-
-class SubscriberTrackingBot:
-    def __init__(self):
-        self.token = "your_token_here"
-        self.bot_info = {"version": "1.0"}
-        self.scheduler = None  # תממש לפי מה שכבר היה לך
-        self.app = None        # תממש לפי מה שכבר היה לך
-
-    async def run(self):
-        """הפעלת Subscriber_tracking Bot ב-Render"""
-        logger.info(" Subscriber_tracking Bot starting on Render...")
-        logger.info(f" Version: {self.bot_info['version']}")
-        logger.info(f" Database: {Config.DATABASE_PATH}")
-        logger.info(f" Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-        logger.info(f" Port: {Config.PORT}")
-        logger.info(f" Token: {' Configured' if self.token else ' Missing'}")
-
-    #  הפעל את המתזמן אם הוא מאותחל
-    if self.scheduler:
-        try:
-            self.scheduler.start()
-            logger.info(" Scheduler started")
-        except Exception as e:
-            logger.warning(f" Scheduler couldn't start: {e}")
-    else:
-        logger.warning(" Scheduler is None")
-
-    #  הפעל את הבוט ב־polling אם app קיים
-    if self.app:
-        try:
-            logger.info(" Starting bot polling...")
-            await self.app.run_polling()
-        except Exception as e:
-            logger.error(f" Bot polling failed: {e}")
-    else:
-        logger.error(" self.app is None  לא ניתן להפעיל את הבוט")
-
     async def check_and_send_notifications(self):
         """בדיקה ושליחת התראות יומית"""
         try:
             logger.info(" Checking for notifications to send...")
-            conn = sqlite3.connect("database.db")
+            conn = sqlite3.connect(Config.DATABASE_PATH)
             cursor = conn.cursor()
             today = datetime.now().date()
 
@@ -1677,6 +1632,16 @@ class SubscriberTrackingBot:
             logger.info(f" Notification sent successfully to user {user_id}")
         except Exception as e:
             logger.error(f" Failed to send notification to user {user_id}: {e}")
+
+import logging
+import signal
+import sys
+import sqlite3
+from datetime import datetime
+from apscheduler.triggers.cron import CronTrigger
+
+logger = logging.getLogger(__name__)
+
 
 # טיפול בסיגנלים ל־Render
 def signal_handler(sig, frame):
