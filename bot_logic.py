@@ -1588,6 +1588,12 @@ class SubscriberTrackingBot:
     logger.info(f"🌐 Port: {Config.PORT}")
     logger.info(f"🔑 Token: {'✅ Configured' if self.token else '❌ Missing'}")
 
+    # הפעלת המתזמן אם נדרש
+    if hasattr(self, "scheduler"):
+        self.scheduler.start()
+        logger.info("⏰ Scheduler started")
+
+    # הפעלת הבוט
     await self.app.run_polling()
         
         # הפעלת scheduler
