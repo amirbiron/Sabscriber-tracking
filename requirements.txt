@@ -1,7 +1,7 @@
 python-telegram-bot==20.0
-requests>=2.31.0
-APScheduler==3.6.3
-python-dotenv>=1.0.0
-Pillow>=10.0.0
-pytesseract>=0.3.10
-nest_asyncio>=1.5.8
+apscheduler
+pillow
+pytesseract
+python-dotenv
+requests
+nest-asyncio
