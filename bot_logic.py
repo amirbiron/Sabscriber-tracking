@@ -241,49 +241,17 @@ class SubscriberTrackingBot:
         logger.info(" Database initialized successfully")
 
     def setup_handlers(self):
-        """Register all command and message handlers for the bot."""
-        # Core commands requested
+        """Register only the core command and message handlers required by the basic spec."""
+        # Remove any previously-registered handlers by creating a fresh Application if needed
+        # but easiest is to assume this is called once per run.
+
+        # Core commands
         self.app.add_handler(CommandHandler("start", self.start))
         self.app.add_handler(CommandHandler("summary", self.summary_command))
         self.app.add_handler(CommandHandler("help", self.help))
 
-        # Additional commands already supported
-        self.app.add_handler(CommandHandler("about", self.about_command))
-        self.app.add_handler(CommandHandler("my_subs", self.my_subscriptions_command))
-        self.app.add_handler(CommandHandler("stats", self.stats_command))
-        self.app.add_handler(CommandHandler("analytics", self.analytics_command))
-        self.app.add_handler(CommandHandler("categories", self.categories_command))
-        self.app.add_handler(CommandHandler("upcoming", self.upcoming_payments_command))
-        self.app.add_handler(CommandHandler("export", self.export_data_command))
-        self.app.add_handler(CommandHandler("settings", self.settings_command))
-        self.app.add_handler(CommandHandler("add_subscription", self.add_subscription))
-
-        # Text messages
+        # Fallback for any plain text message
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
-
-        # Callback and pattern handlers
-        self.app.add_handler(CallbackQueryHandler(self.handle_ocr_actions))
-        self.app.add_handler(MessageHandler(filters.Regex(r'^/edit_\d+$'), self.edit_subscription_command))
-        self.app.add_handler(MessageHandler(filters.Regex(r'^/delete_\d+$'), self.delete_subscription_command))
-
-        # Conversation handler for adding subscription
-        add_conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("add_subscription", self.add_subscription_start)],
-            states={
-                ADD_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_service)],
-                ADD_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_amount)],
-                ADD_CURRENCY: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_currency)],
-                ADD_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_date)],
-            },
-            fallbacks=[CommandHandler("cancel", self.cancel)],
-        )
-        self.app.add_handler(add_conv_handler)
-
-        # Photo handlers
-        if OCR_AVAILABLE and Config.ENABLE_OCR:
-            self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot_ocr))
-        else:
-            self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot))
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Responds to the /start command with a simple health-check message."""
@@ -338,8 +306,8 @@ class SubscriberTrackingBot:
         await update.message.reply_text("תודה שפנית אליי!")
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """עטיפה עבור help_command כדי להשאיר תאימות לפקודת /help."""
-        await self.help_command(update, context)
+        """Temporary /help command response (placeholder)."""
+        await update.message.reply_text("ℹ️ לעזרה זמנית: תיעוד מפורט יתווסף בהמשך.")
 
     def ensure_user_settings(self, user_id: int):
         """וידוא שקיימות הגדרות למשתמש"""
