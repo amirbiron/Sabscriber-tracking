@@ -3,5 +3,4 @@ apscheduler
 pillow
 pytesseract
 python-dotenv
-requests
 nest-asyncio
