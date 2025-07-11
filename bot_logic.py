@@ -1622,7 +1622,7 @@ class SubscriberTrackingBot:
                 await self.app.initialize()
                 await self.app.start()
                 await self.app.updater.start_polling()
-                await self.app.updater.stop()
+                await self.app.updater.idle()
             except Exception as e:
                 logger.error(f"❌ Bot polling failed: {e}")
         else:
