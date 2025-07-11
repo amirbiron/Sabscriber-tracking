@@ -44,7 +44,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"✅ Subscriber_tracking Bot is alive")
+        self.wfile.write("✅ Subscriber_tracking Bot is alive".encode("utf-8"))
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", 8000))  # Render מצפה ל־PORT
