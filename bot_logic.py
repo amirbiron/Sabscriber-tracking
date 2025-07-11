@@ -5,7 +5,7 @@
 בוט ניהול מנויים אישי חכם - מותאם ל-Render
 
 Created by: Your Development Team
-Version: 1.0.0
+Version: 1.1.0 (Refactored)
 Deployment: Render.com
 """
 
@@ -15,92 +15,51 @@ import asyncio
 import signal
 import re
 import os
-from telegram import Bot
-from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Tuple
 import io
-from telegram.ext import ApplicationBuilder
-from pathlib import Path
-import sys  # Added for graceful shutdown handling
+import sys
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Tuple, Any
 
-# הגדרת logging בתחילת הקובץ - לפני כל השאר
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
-)
-logger = logging.getLogger(__name__)
-
-# עכשיו ניתן להוסיף file handler אם אפשר (רק בסביבה מקומית)
+# Optional imports handled with feature flags
 try:
-    if not os.getenv('RENDER'):  # לא ברנדר
-        file_handler = logging.FileHandler('subscriber_tracking.log', encoding='utf-8')
-        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-        logger.addHandler(file_handler)
-        logger.info("File logging enabled")
-    else:
-        logger.info("Running on Render - console logging only")
-except Exception:
-    logger.warning("Could not create log file - using console only")
+    from PIL import Image, ImageEnhance, ImageFilter
+    import pytesseract
+    pytesseract.get_tesseract_version()
+    OCR_AVAILABLE = True
+except (ImportError, Exception):
+    OCR_AVAILABLE = False
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, File
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, 
+    Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ConversationHandler, ContextTypes, filters
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
-# Optional imports for advanced features
-try:
-    import pytesseract
-    from PIL import Image
-    # Test if tesseract is actually available
-    pytesseract.get_tesseract_version()
-    OCR_AVAILABLE = True
-    logger.info("OCR support available")
-except (ImportError, Exception):
-    OCR_AVAILABLE = False
-    logger.warning("OCR not available - pytesseract/tesseract not installed")
+# --- הגדרת logging בתחילת הקובץ ---
+# Render's environment provides stdout logging, which is sufficient.
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
-try:
-    import requests
-    from dotenv import load_dotenv
-    load_dotenv()
-    REQUESTS_AVAILABLE = True
-    logger.info("Requests support available")
-except ImportError:
-    REQUESTS_AVAILABLE = False
-    logger.warning("Requests not available - some features may be limited")
-# Configuration class for Render deployment
+# --- Configuration Class ---
 class Config:
-    # Bot settings - Environment variables from Render
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-    
-    # Database settings
-    DATABASE_PATH = os.getenv('DATABASE_PATH', '/tmp/subscriber_tracking.db')
-    
-    # Notification settings
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'subscriber_tracking.db') # Use local file for easier dev
     NOTIFICATION_HOUR = int(os.getenv('NOTIFICATION_HOUR', 9))
     NOTIFICATION_MINUTE = int(os.getenv('NOTIFICATION_MINUTE', 0))
-    
-    # Feature flags
-    ENABLE_OCR = os.getenv('ENABLE_OCR', 'false').lower() == 'true'
-    ENABLE_ANALYTICS = os.getenv('ENABLE_ANALYTICS', 'true').lower() == 'true'
-    
-    # Port for Render (if needed for web service)
-    PORT = int(os.getenv('PORT', 8000))
-    
-    @classmethod
-    def validate_token(cls):
-        """בדיקת תקינות הטוקן"""
-        if not cls.TELEGRAM_BOT_TOKEN:
-            raise ValueError(" TELEGRAM_BOT_TOKEN environment variable not set! Please configure it in Render.")
-        if cls.TELEGRAM_BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-            raise ValueError(" TELEGRAM_BOT_TOKEN contains placeholder value! Please set your actual bot token.")
-        return cls.TELEGRAM_BOT_TOKEN
-    
-    # Common services
+    ENABLE_OCR = os.getenv('ENABLE_OCR', 'true').lower() == 'true' and OCR_AVAILABLE
+    DEMO_SAVINGS = float(os.getenv('DEMO_SAVINGS', 2847.50))
+
     COMMON_SERVICES = [
         'Netflix', 'Spotify', 'ChatGPT Plus', 'YouTube Premium',
         'Amazon Prime', 'Disney+', 'Apple Music', 'Office 365',
@@ -108,1505 +67,540 @@ class Config:
         'Zoom Pro', 'Slack', 'Notion', 'Figma', 'Canva Pro'
     ]
 
-# Conversation states
+    @classmethod
+    def validate_token(cls):
+        if not cls.TELEGRAM_BOT_TOKEN:
+            raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set!")
+        return cls.TELEGRAM_BOT_TOKEN
+
+# --- Conversation States ---
 ADD_SERVICE, ADD_AMOUNT, ADD_CURRENCY, ADD_DATE = range(4)
 EDIT_CHOICE, EDIT_VALUE = range(2)
 
-class SubscriberTrackingBot:
-    """ Subscriber_tracking Bot - בוט ניהול מנויים חכם"""
-    
-    def __init__(self, token: str = None):
+
+# --- Database Manager Class (Refactored) ---
+class DatabaseManager:
+    """Handles all database operations for the bot."""
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        logger.info(f"DatabaseManager initialized with path: {self.db_path}")
+
+    def _execute(self, query: str, params: tuple = (), fetch: str = None):
+        """Helper function to connect, execute, and close."""
         try:
-            self.token = token or Config.validate_token()
-            self.app = Application.builder().token(self.token).build()
-            self.scheduler = AsyncIOScheduler()
-            self.bot_info = {
-                'name': 'Subscriber_tracking',
-                'version': '1.0.0',
-                'description': 'בוט ניהול מנויים אישי חכם'
-            }
-            self.init_database()
-            # Handlers will be set up inside run() to comply with new design
-            # self.setup_handlers() removed
-        except ValueError as e:
-            logger.error(f"Configuration error: {e}")
-            raise
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row # Makes fetching columns by name easy
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                if fetch == 'one':
+                    return cursor.fetchone()
+                if fetch == 'all':
+                    return cursor.fetchall()
+                conn.commit()
+                return cursor.lastrowid
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {e}\nQuery: {query}\nParams: {params}")
+            return None # Or raise a custom exception
 
     def init_database(self):
-        """אתחול מסד הנתונים של Subscriber_tracking"""
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # טבלת מנויים מורחבת
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                service_name TEXT NOT NULL,
-                amount REAL NOT NULL,
-                currency TEXT NOT NULL DEFAULT '',
-                billing_day INTEGER NOT NULL,
-                billing_cycle TEXT DEFAULT 'monthly',
-                category TEXT DEFAULT 'other',
-                notes TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT 1,
-                
-                -- מטאדטה חדשה
-                auto_detected BOOLEAN DEFAULT 0,
-                confidence_score REAL DEFAULT 1.0,
-                last_reminder_sent DATE,
-                times_reminded INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # טבלת התראות
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subscription_id INTEGER NOT NULL,
-                notification_date DATE NOT NULL,
-                notification_type TEXT NOT NULL,
-                sent BOOLEAN DEFAULT 0,
-                user_response TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (subscription_id) REFERENCES subscriptions (id)
-            )
-        ''')
-        
-        # טבלת סטטיסטיקות שימוש
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS usage_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                subscription_id INTEGER,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                metadata TEXT,
-                session_id TEXT
-            )
-        ''')
-        
-        # טבלת קטגוריות מותאמות
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                emoji TEXT,
-                description TEXT,
-                color_hex TEXT DEFAULT '#3498db',
-                is_default BOOLEAN DEFAULT 1
-            )
-        ''')
-        
-        # טבלת הגדרות משתמש
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_settings (
-                user_id INTEGER PRIMARY KEY,
-                timezone TEXT DEFAULT 'Asia/Jerusalem',
-                notification_time TEXT DEFAULT '09:00',
-                language TEXT DEFAULT 'he',
-                currency_preference TEXT DEFAULT '',
-                weekly_summary BOOLEAN DEFAULT 1,
-                smart_suggestions BOOLEAN DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # הוספת קטגוריות ברירת מחדל של Subscriber_tracking
-        default_categories = [
-            ('streaming', '', 'שירותי סטרימינג', '#e74c3c'),
-            ('music', '', 'שירותי מוזיקה', '#9b59b6'),
-            ('productivity', '', 'כלי פרודוקטיביות', '#f39c12'),
-            ('cloud', '', 'אחסון בענן', '#3498db'),
-            ('software', '', 'תוכנות ואפליקציות', '#2ecc71'),
-            ('gaming', '', 'משחקים', '#e67e22'),
-            ('news', '', 'חדשות ומגזינים', '#34495e'),
-            ('fitness', '', 'כושר ובריאות', '#1abc9c'),
-            ('education', '', 'חינוך והשכלה', '#8e44ad'),
-            ('communication', '', 'תקשורת ושיתוף', '#16a085'),
-            ('financial', '', 'שירותים פיננסיים', '#27ae60'),
-            ('other', '', 'אחר', '#95a5a6')
+        """Initializes all tables in the database if they don't exist."""
+        # Create tables using a list of queries for cleanliness
+        create_table_queries = [
+            '''CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, service_name TEXT NOT NULL,
+                amount REAL NOT NULL, currency TEXT NOT NULL DEFAULT 'ILS', billing_day INTEGER NOT NULL,
+                billing_cycle TEXT DEFAULT 'monthly', category TEXT DEFAULT 'other', notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1, auto_detected BOOLEAN DEFAULT 0
+            )''',
+            '''CREATE TABLE IF NOT EXISTS user_settings (
+                user_id INTEGER PRIMARY KEY, timezone TEXT DEFAULT 'Asia/Jerusalem',
+                notification_time TEXT DEFAULT '09:00', language TEXT DEFAULT 'he',
+                currency_preference TEXT DEFAULT 'ILS', weekly_summary BOOLEAN DEFAULT 1,
+                smart_suggestions BOOLEAN DEFAULT 1
+            )''',
+            '''CREATE TABLE IF NOT EXISTS usage_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+                action TEXT NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )'''
         ]
-        
-        cursor.executemany('''
-            INSERT OR IGNORE INTO categories (name, emoji, description, color_hex)
-            VALUES (?, ?, ?, ?)
-        ''', default_categories)
-        
-        conn.commit()
-        conn.close()
-        logger.info(" Database initialized successfully")
+        for query in create_table_queries:
+            self._execute(query)
+        logger.info("Database initialized successfully.")
 
-    def setup_handlers(self):
-        """Register only the core command and message handlers required by the basic spec."""
-        # Remove any previously-registered handlers by creating a fresh Application if needed
-        # but easiest is to assume this is called once per run.
+    def add_subscription(self, user_id: int, service_name: str, amount: float, currency: str, billing_day: int, category: str):
+        query = '''INSERT INTO subscriptions (user_id, service_name, amount, currency, billing_day, category)
+                   VALUES (?, ?, ?, ?, ?, ?)'''
+        return self._execute(query, (user_id, service_name, amount, currency, billing_day, category))
 
-        # Core commands
-        self.app.add_handler(CommandHandler("start", self.start))
-        self.app.add_handler(CommandHandler("summary", self.summary_command))
-        self.app.add_handler(CommandHandler("help", self.help))
+    def get_user_subscriptions(self, user_id: int) -> List[sqlite3.Row]:
+        query = 'SELECT * FROM subscriptions WHERE user_id = ? AND is_active = 1 ORDER BY billing_day ASC'
+        return self._execute(query, (user_id,), fetch='all')
 
-        # Fallback for any plain text message
-        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
+    def get_subscription_by_id(self, sub_id: int, user_id: int) -> Optional[sqlite3.Row]:
+        query = 'SELECT * FROM subscriptions WHERE id = ? AND user_id = ? AND is_active = 1'
+        return self._execute(query, (sub_id, user_id), fetch='one')
 
-    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Responds to the /start command with a simple health-check message."""
-        await update.message.reply_text("👋 היי! הבוט מחובר ועובד ✅")
+    def delete_subscription(self, sub_id: int, user_id: int):
+        # We perform a "soft delete" by setting is_active to 0. This preserves data.
+        query = 'UPDATE subscriptions SET is_active = 0 WHERE id = ? AND user_id = ?'
+        self._execute(query, (sub_id, user_id))
+        logger.info(f"Soft deleted subscription {sub_id} for user {user_id}")
 
-    async def add_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Alias entry-point for /add_subscription that delegates to the guided flow."""
-        return await self.add_subscription_start(update, context)
+    def update_subscription(self, sub_id: int, user_id: int, field: str, value: Any):
+        # Note: Be careful with this pattern to avoid SQL injection if field names come from user input.
+        # Here, field names are controlled by our code, so it's safe.
+        query = f'UPDATE subscriptions SET {field} = ?, last_modified = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+        self._execute(query, (value, sub_id, user_id))
 
-    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Generic fallback for plain-text messages outside recognised flows."""
-        await update.message.reply_text(
-            "🤖 לא זיהיתי פקודה. הקלד /help לרשימת פקודות או /add_subscription כדי להוסיף מנוי."
-        )
+    def get_stats_by_category(self, user_id: int) -> List[sqlite3.Row]:
+        query = '''SELECT category, COUNT(*) as count, SUM(amount) as total
+                   FROM subscriptions WHERE user_id = ? AND is_active = 1
+                   GROUP BY category ORDER BY total DESC'''
+        return self._execute(query, (user_id,), fetch='all')
 
-    async def about_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """מידע על Subscriber_tracking"""
-        about_text = f"""
- **אודות Subscriber_tracking Bot**
-
- **גרסה:** {self.bot_info['version']}
- **שם:** {self.bot_info['name']}
- **תיאור:** {self.bot_info['description']}
-
- **מפותח על ידי:** Your Development Team
- **תאריך יצירה:** {datetime.now().strftime('%B %Y')}
-
- **טכנולוגיות:**
- Python 3.8+
- python-telegram-bot
- SQLite Database
- OCR (Tesseract)
- APScheduler
-
- **מטרה:**
-לעזור לאנשים לנהל את המנויים שלהם בצורה חכמה ולחסוך כסף!
-
- **סטטיסטיקות:**
- משתמשים פעילים: {self.get_active_users_count()}
- מנויים במעקב: {self.get_total_subscriptions()}
- כסף נחסך השנה: {self.calculate_total_savings():,.2f}
-
- **הבוט חינמי לחלוטין ובקוד פתוח!**
-
-תודה שאתה משתמש ב-Subscriber_tracking! 
-        """
-        
-        await update.message.reply_text(about_text, parse_mode='Markdown')
-
-    async def summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """סיכום נתונים למשתמש – תשובת ברירת מחדל"""
-        await update.message.reply_text("תודה שפנית אליי!")
-
-    async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Temporary /help command response (placeholder)."""
-        await update.message.reply_text("ℹ️ לעזרה זמנית: תיעוד מפורט יתווסף בהמשך.")
+    def log_user_action(self, user_id: int, action: str):
+        query = 'INSERT INTO usage_stats (user_id, action) VALUES (?, ?)'
+        self._execute(query, (user_id, action))
 
     def ensure_user_settings(self, user_id: int):
-        """וידוא שקיימות הגדרות למשתמש"""
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT user_id FROM user_settings WHERE user_id = ?', (user_id,))
-        if not cursor.fetchone():
-            cursor.execute('''
-                INSERT INTO user_settings (user_id) VALUES (?)
-            ''', (user_id,))
-            conn.commit()
-        
-        conn.close()
+        if not self._execute('SELECT user_id FROM user_settings WHERE user_id = ?', (user_id,), fetch='one'):
+            self._execute('INSERT INTO user_settings (user_id) VALUES (?)', (user_id,))
+            logger.info(f"Created default settings for new user {user_id}")
+    
+    def get_user_settings(self, user_id: int) -> Optional[sqlite3.Row]:
+        self.ensure_user_settings(user_id)
+        return self._execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,), fetch='one')
 
-    def get_active_users_count(self) -> int:
-        """מספר המשתמשים הפעילים"""
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT COUNT(DISTINCT user_id) 
-            FROM subscriptions 
-            WHERE is_active = 1
-        ''')
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+# --- Main Bot Class ---
+class SubscriberTrackingBot:
+    """The main class for the Subscriber Tracking Bot."""
 
-    def get_total_subscriptions(self) -> int:
-        """מספר כל המנויים במערכת"""
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT COUNT(*) FROM subscriptions WHERE is_active = 1')
-        count = cursor.fetchone()[0]
-        conn.close()
-        return count
+    def __init__(self, token: str):
+        self.token = token
+        self.app = Application.builder().token(self.token).build()
+        self.scheduler = AsyncIOScheduler()
+        self.db = DatabaseManager(Config.DATABASE_PATH)
+        self.db.init_database()
 
-    def calculate_total_savings(self) -> float:
-        """חישוב חיסכון כולל (דמה)"""
-        # זה יכול להיות מבוסס על מנויים שבוטלו, הנחות שהתקבלו וכו'
-        return 2847.50  # דוגמה
+    def setup_handlers(self):
+        """Register all command, message, and callback handlers."""
+        # Conversation handler for adding a new subscription
+        add_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler("add_subscription", self.add_subscription_start)],
+            states={
+                ADD_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_service)],
+                ADD_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_amount)],
+                ADD_CURRENCY: [
+                    CallbackQueryHandler(self.handle_currency_selection, pattern='^currency_'),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_currency_text)
+                ],
+                ADD_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.add_date)],
+            },
+            fallbacks=[CommandHandler("cancel", self.cancel)],
+            per_user=True
+        )
+
+        self.app.add_handler(add_conv_handler)
+
+        # Standard command handlers
+        self.app.add_handler(CommandHandler("start", self.start))
+        self.app.add_handler(CommandHandler("help", self.help_command))
+        self.app.add_handler(CommandHandler("my_subs", self.my_subscriptions_command))
+        self.app.add_handler(CommandHandler("stats", self.stats_command))
+        self.app.add_handler(CommandHandler("analytics", self.analytics_command))
+        self.app.add_handler(CommandHandler("upcoming", self.upcoming_payments_command))
+        self.app.add_handler(CommandHandler("export", self.export_data_command))
+        self.app.add_handler(CommandHandler("settings", self.settings_command))
+        
+        # Regex handlers for specific command patterns
+        self.app.add_handler(MessageHandler(filters.Regex(r'^/edit_(\d+)$'), self.edit_subscription_command))
+        self.app.add_handler(MessageHandler(filters.Regex(r'^/delete_(\d+)$'), self.delete_subscription_command))
+
+        # OCR handler for photos
+        if Config.ENABLE_OCR:
+            self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot_ocr))
+        
+        # General callback handler for all other inline buttons
+        self.app.add_handler(CallbackQueryHandler(self.button_callback))
+
+        # Fallback for any unrecognized text
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_unknown_text))
+        
+        logger.info("All handlers registered successfully.")
+
+    # --- Core Command Handlers ---
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        self.db.ensure_user_settings(user.id)
+        self.db.log_user_action(user.id, "start")
+        welcome_text = f"👋 היי {user.first_name}!\nאני בוט למעקב אחר מנויים.\n\n" \
+                       "אני יכול לעזור לך:\n" \
+                       "✅ לעקוב אחרי כל ההוצאות החודשיות\n" \
+                       "📊 לקבל סטטיסטיקות ותובנות\n" \
+                       "🗓️ לקבל תזכורות לפני חיוב\n\n" \
+                       "התחל על ידי הוספת מנוי ראשון עם /add_subscription או הקלד /help למדריך."
+        await update.message.reply_text(welcome_text)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """מדריך שימוש מפורט ב-Subscriber_tracking"""
+        self.db.log_user_action(update.effective_user.id, "help")
         help_text = """
- **מדריך Subscriber_tracking - המלא**
+📖 **מדריך למשתמש** 📖
 
- **הוספת מנויים:**
-/add_subscription - מוסיף מנוי חדש בתהליך מודרך
- שלח צילום מסך - זיהוי אוטומטי עם OCR!
+**/add_subscription** - הוספת מנוי חדש בתהליך מודרך.
+**/my_subs** - הצגת כל המנויים הפעילים שלך.
+**/stats** - סטטיסטיקות ופילוח הוצאות.
+**/analytics** - ניתוח מתקדם והמלצות לחיסכון.
+**/upcoming** - תצוגת תשלומים קרובים (ב-30 הימים הבאים).
+**/export** - ייצוא כל הנתונים שלך לקובץ CSV.
+**/settings** - שינוי הגדרות אישיות כמו שעת התראה.
+**/cancel** - ביטול הפעולה הנוכחית (למשל, באמצע הוספת מנוי).
 
- **צפייה וניהול:**
-/my_subs - כל המנויים שלך עם אפשרויות עריכה
-/upcoming - תשלומים קרובים (30 יום הקדימה)
-/categories - ניהול קטגוריות למיון טוב יותר
-
- **אנליטיקה ותובנות:**
-/stats - סטטיסטיקות מהירות
-/analytics - ניתוח מעמיק עם המלצות חיסכון
-/export - ייצוא הנתונים שלך ל-CSV
-
- **הגדרות והתאמה:**
-/settings - הגדרות אישיות (שעת התראות, מטבע, שפה)
-
- **פעולות מתקדמות:**
- /edit_[מספר] - עריכת מנוי ספציפי
- /delete_[מספר] - מחיקת מנוי
-
- **פיצ'רים חכמים:**
-  תזכורות אוטומטיות (שבוע + יום לפני)
-  ניתוח מגמות הוצאה
-  המלצות חיסכון מבוססות AI
-  זיהוי טקסט מתמונות
-  מעקב אחר קטגוריות הוצאה
-
- **טיפים לשימוש מיטבי:**
-1. הוסף קטגוריות למנויים לניתוח טוב יותר
-2. בדוק את /upcoming בתחילת כל חודש  
-3. השתמש ב-/analytics לזיהוי הזדמנויות חיסכון
-4. צלם מסכי חיוב ברורים לזיהוי מדויק
-5. עדכן הגדרות ב-/settings לחוויה מותאמת
-
- **שאלות נפוצות:**
- הבוט תומך בכל המטבעות הנפוצים
- אפשר לנהל מנויים שנתיים/רבעוניים
- הנתונים מוגנים ונשמרים מקומית
- הבוט עובד 24/7 ושולח התראות אוטומטיות
-
- **זקוק לעזרה?** פשוט שלח הודעה ואני אעזור!
-        """
-        
+💡 **טיפ:** ניתן גם לשלוח צילום מסך של חיוב, ואנסה לזהות את הפרטים אוטומטית!
+"""
         await update.message.reply_text(help_text, parse_mode='Markdown')
 
-    def log_user_action(self, user_id: int, action: str, subscription_id: int = None, metadata: str = None):
-        """רישום פעילות משתמש"""
-        try:
-            conn = sqlite3.connect(Config.DATABASE_PATH)
-            cursor = conn.cursor()
-            
-            session_id = f"{user_id}_{datetime.now().strftime('%Y%m%d_%H')}"
-            
-            cursor.execute('''
-                INSERT INTO usage_stats (user_id, action, subscription_id, metadata, session_id)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, action, subscription_id, metadata, session_id))
-            
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Failed to log user action: {e}")
-
-    async def add_subscription_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """התחלת תהליך הוספת מנוי ב-Subscriber_tracking"""
+    async def my_subscriptions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
-        self.log_user_action(user_id, "add_subscription_start")
+        self.db.log_user_action(user_id, "my_subs")
+        subscriptions = self.db.get_user_subscriptions(user_id)
+
+        if not subscriptions:
+            await update.message.reply_text("לא מצאתי מנויים רשומים. הוסף אחד עם /add_subscription")
+            return
+
+        total_monthly = sum(sub['amount'] for sub in subscriptions)
+        header = f"📄 **הנה המנויים שלך ({len(subscriptions)}):**\n\n**סה\"כ הוצאה חודשית:** {total_monthly:.2f} ₪\n"
         
-        # הצגת שירותים נפוצים לבחירה מהירה
-        common_services_text = " **שירותים פופולריים:**\n"
-        for i, service in enumerate(Config.COMMON_SERVICES[:8], 1):
-            common_services_text += f"{i}. {service}\n"
+        subs_text = ""
+        for sub in subscriptions:
+            emoji = self.get_category_emoji(sub['category'])
+            subs_text += (f"\n{emoji} **{sub['service_name']}**\n"
+                          f"    💰 {sub['amount']:.2f} {sub['currency']} | 🗓️ ב-{sub['billing_day']} לחודש\n"
+                          f"    `/edit_{sub['id']}` | `/delete_{sub['id']}`\n")
         
-        intro_text = f"""
- **הוספת מנוי חדש ל-Subscriber_tracking**
+        keyboard = [[InlineKeyboardButton("➕ הוסף מנוי חדש", callback_data="add_new_sub")]]
+        await update.message.reply_text(header + subs_text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        
+    async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        self.db.log_user_action(user_id, "view_stats")
+        categories = self.db.get_stats_by_category(user_id)
 
-{common_services_text}
+        if not categories:
+            await update.message.reply_text("אין נתונים להצגת סטטיסטיקות. הוסף מנויים תחילה.")
+            return
 
- **איך קוראים לשירות?**
-(פשוט כתוב את השם או בחר מהרשימה למעלה)
+        total_amount = sum(cat['total'] for cat in categories)
+        stats_text = f"📊 **סטטיסטיקות לפי קטגוריה**\n\n**סה\"כ חודשי:** {total_amount:.2f} ₪\n"
 
- **טיפ:** אפשר גם לשלוח צילום מסך של החיוב לזיהוי אוטומטי!
+        for cat in categories:
+            emoji = self.get_category_emoji(cat['category'])
+            percentage = (cat['total'] / total_amount * 100) if total_amount > 0 else 0
+            stats_text += f"\n{emoji} **{cat['category'].title()}:** {cat['total']:.2f} ₪ ({percentage:.1f}%)"
+
+        await update.message.reply_text(stats_text, parse_mode='Markdown')
+
+    async def analytics_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("📈 פיצ'ר ניתוח מתקדם והמלצות חיסכון יתווסף בקרוב!")
+
+    async def upcoming_payments_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        self.db.log_user_action(user_id, "view_upcoming")
+        subscriptions = self.db.get_user_subscriptions(user_id)
+
+        if not subscriptions:
+            await update.message.reply_text("אין מנויים פעילים לתצוגת תשלומים קרובים.")
+            return
+
+        today = datetime.now().day
+        upcoming_subs = []
+        for sub in subscriptions:
+            if sub['billing_day'] >= today:
+                days_until = sub['billing_day'] - today
+                upcoming_subs.append((days_until, sub))
+        
+        upcoming_subs.sort(key=lambda x: x[0])
+        
+        text = f"🗓️ **תשלומים קרובים (עד סוף החודש):**\n"
+        if not upcoming_subs:
+            text += "\nאין חיובים צפויים עד סוף החודש."
+        else:
+            for days, sub in upcoming_subs:
+                when = "היום" if days == 0 else "מחר" if days == 1 else f"בעוד {days} ימים"
+                text += f"\n- **{when} ({sub['billing_day'] לחודש}):** {sub['service_name']} - {sub['amount']:.2f} {sub['currency']}"
+
+        await update.message.reply_text(text)
+
+    async def export_data_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        self.db.log_user_action(user_id, "export_data")
+        subscriptions = self.db.get_user_subscriptions(user_id)
+
+        if not subscriptions:
+            await update.message.reply_text("אין נתונים לייצוא.")
+            return
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        output.write("שירות,סכום,מטבע,יום_חיוב,קטגוריה,הערות,תאריך_יצירה\n")
+        for sub in subscriptions:
+            notes = sub['notes'] or ""
+            output.write(f'"{sub["service_name"]}",{sub["amount"]},"{sub["currency"]}",{sub["billing_day"]},'
+                         f'"{sub["category"]}","{notes}","{sub["created_at"]}"\n')
+        
+        # Seek to the beginning of the stream
+        output.seek(0)
+        
+        # Send as a file
+        await update.message.reply_document(
+            document=InputFile(io.BytesIO(output.getvalue().encode('utf-8')), 'subscriptions.csv'),
+            caption="הנה הנתונים שלך בקובץ CSV."
+        )
+
+    async def settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        settings = self.db.get_user_settings(user_id)
+        text = f"""
+⚙️ **הגדרות**
+
+שעת התראה יומית: {settings['notification_time']}
+שפת ממשק: {settings['language']}
+
+פיצ'רים נוספים יתווספו בעתיד.
         """
-        
-        await update.message.reply_text(intro_text, parse_mode='Markdown')
+        await update.message.reply_text(text)
+
+
+    # --- Add Subscription Conversation ---
+    async def add_subscription_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        self.db.log_user_action(update.effective_user.id, "add_subscription_start")
+        await update.message.reply_text(
+            "נהדר! בוא נוסיף מנוי חדש.\n\n"
+            "**מה שם השירות?** (למשל, Netflix, Spotify...)\n\n"
+            "אפשר לבטל בכל רגע עם /cancel."
+        )
         return ADD_SERVICE
 
     async def add_service(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """קבלת שם השירות עם זיהוי חכם"""
-        service_input = update.message.text.strip()
-        
-        # בדיקה אם המשתמש בחר מספר מהרשימה
-        if service_input.isdigit():
-            service_num = int(service_input)
-            if 1 <= service_num <= len(Config.COMMON_SERVICES):
-                service_name = Config.COMMON_SERVICES[service_num - 1]
-            else:
-                await update.message.reply_text("מספר לא חוקי. אנא בחר מספר מהרשימה או כתוב את שם השירות:")
-                return ADD_SERVICE
-        else:
-            service_name = service_input
-        
-        # זיהוי קטגוריה אוטומטית
-        detected_category = self.detect_service_category(service_name)
-        
+        service_name = update.message.text.strip()
         context.user_data['service_name'] = service_name
-        context.user_data['detected_category'] = detected_category
-        
-        category_info = f"\n **קטגוריה מזוהה:** {detected_category}" if detected_category != 'other' else ""
-        
+        context.user_data['detected_category'] = self.detect_service_category(service_name)
+
         await update.message.reply_text(
-            f" **שירות נשמר:** {service_name}{category_info}\n\n"
-            f" **כמה זה עולה?**\n"
-            f"(רק המספר, לדוגמה: 29.90 או 19.99)"
+            f"👍 שירות: **{service_name}**.\n\n"
+            "**מה סכום החיוב החודשי?** (הקלד רק את המספר)"
         )
         return ADD_AMOUNT
 
-    def detect_service_category(self, service_name: str) -> str:
-        """זיהוי קטגוריה אוטומטית של שירות"""
-        service_lower = service_name.lower()
-        
-        category_keywords = {
-            'streaming': ['netflix', 'disney', 'amazon prime', 'hbo', 'hulu', 'paramount', 'apple tv'],
-            'music': ['spotify', 'apple music', 'youtube music', 'deezer', 'tidal', 'pandora'],
-            'productivity': ['office', 'microsoft', 'notion', 'slack', 'zoom', 'teams', 'asana', 'trello'],
-            'cloud': ['dropbox', 'google drive', 'icloud', 'onedrive', 'mega', 'box'],
-            'software': ['adobe', 'photoshop', 'figma', 'sketch', 'canva', 'github'],
-            'gaming': ['xbox', 'playstation', 'steam', 'epic', 'origin', 'nintendo'],
-            'communication': ['whatsapp', 'telegram', 'discord', 'skype'],
-            'fitness': ['nike', 'adidas', 'fitbit', 'myfitnesspal', 'strava'],
-            'education': ['coursera', 'udemy', 'khan academy', 'duolingo', 'skillshare']
-        }
-        
-        for category, keywords in category_keywords.items():
-            if any(keyword in service_lower for keyword in keywords):
-                return category
-        
-        return 'other'
-
     async def add_amount(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """קבלת סכום עם תמיכה בפורמטים שונים"""
         try:
-            amount_text = update.message.text.strip()
-            
-            # ניקוי הטקסט מסימנים מיותרים
-            amount_text = re.sub(r'[^\d.,]', '', amount_text)
-            amount_text = amount_text.replace(',', '.')
-            
-            amount = float(amount_text)
-            
-            if amount <= 0:
-                raise ValueError("סכום חייב להיות חיובי")
-                
+            amount = float(re.sub(r'[^\d.]', '', update.message.text))
+            if amount <= 0: raise ValueError
             context.user_data['amount'] = amount
             
-            # הצגת כפתורי מטבע מותאמים לישראל
             keyboard = [
-                [InlineKeyboardButton(" שקל ישראלי", callback_data="currency_ils")],
-                [InlineKeyboardButton("$ דולר אמריקאי", callback_data="currency_usd")],
-                [InlineKeyboardButton(" יורו", callback_data="currency_eur")],
-                [InlineKeyboardButton(" מטבע אחר", callback_data="currency_other")]
+                [InlineKeyboardButton("₪ שקל", callback_data="currency_ILS")],
+                [InlineKeyboardButton("$ דולר", callback_data="currency_USD")],
+                [InlineKeyboardButton("€ אירו", callback_data="currency_EUR")],
+                [InlineKeyboardButton("אחר (טקסט)", callback_data="currency_other")]
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await update.message.reply_text(
-                f" **סכום:** {amount}\n\n**באיזה מטבע?**",
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
+                f"💰 סכום: **{amount}**. באיזה מטבע?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return ADD_CURRENCY
-            
-        except ValueError:
-            await update.message.reply_text(
-                " אופס! צריך להכניס מספר חוקי.\n\n"
-                "דוגמאות: 29.90, 19.99, 50\n"
-                "נסה שוב:"
-            )
+        except (ValueError, TypeError):
+            await update.message.reply_text("נראה שזה לא מספר חוקי. אנא הקלד רק את סכום החיוב:")
             return ADD_AMOUNT
 
-    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """טיפול מתקדם בלחיצות כפתורים"""
+    async def handle_currency_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         await query.answer()
         
-        if query.data.startswith("currency_"):
-            return await self.handle_currency_selection(query, context)
-        elif query.data.startswith("quick_"):
-            return await self.handle_quick_actions(query, context)
-        elif query.data.startswith("ocr_"):
-            return await self._process_ocr_actions(query, context)
-        else:
-            await query.edit_message_text("פעולה לא מזוהה.")
-
-    async def handle_currency_selection(self, query, context):
-        """טיפול בבחירת מטבע"""
-        currency_map = {
-            "currency_ils": "",
-            "currency_usd": "$", 
-            "currency_eur": ""
-        }
+        currency_code = query.data.split('_')[1]
         
-        if query.data == "currency_other":
-            await query.edit_message_text(
-                " **איזה מטבע?**\n"
-                "(הכנס סימן או קיצור, לדוגמה: , CHF, )"
-            )
+        if currency_code == "other":
+            await query.edit_message_text("בסדר, הקלד את סימון המטבע (לדוגמה: GBP):")
             return ADD_CURRENCY
-        else:
-            context.user_data['currency'] = currency_map[query.data]
-            await query.edit_message_text(
-                " **באיזה תאריך בחודש יש חיוב?**\n\n"
-                "הכנס מספר בין 1-28\n"
-                "(לדוגמה: 15 = חמישה עשר בכל חודש)\n\n"
-                " **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
-            )
-            return ADD_DATE
 
-    async def handle_screenshot_ocr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """טיפול מתקדם בצילום מסך עם OCR"""
-        if not OCR_AVAILABLE:
-            await self.handle_screenshot(update, context)
-            return
-        
-        processing_msg = await update.message.reply_text(
-            " **מעבד תמונה...**\n"
-            " מזהה טקסט\n"
-            " זה יקח רגע..."
+        context.user_data['currency'] = currency_code
+        await query.edit_message_text(
+            f"✅ מטבע: **{currency_code}**.\n\n"
+            "**באיזה יום בחודש מתבצע החיוב?** (מספר בין 1-28)"
         )
-        
-        try:
-            # הורדת התמונה
-            photo = update.message.photo[-1]
-            file = await context.bot.get_file(photo.file_id)
-            
-            image_bytes = io.BytesIO()
-            await file.download_to_memory(image_bytes)
-            image_bytes.seek(0)
-            image = Image.open(image_bytes)
-            
-            # שיפור איכות התמונה לOCR
-            image = self.enhance_image_for_ocr(image)
-            
-            # OCR עם תמיכה בעברית ואנגלית
-            extracted_text = pytesseract.image_to_string(image, lang='heb+eng')
-            
-            # ניתוח מתקדם של הטקסט
-            parsed_data = self.advanced_parse_billing_text(extracted_text)
-            
-            await processing_msg.delete()
-            
-            if parsed_data and parsed_data.get('confidence', 0) > 0.6:
-                await self.show_ocr_results(update, parsed_data, context)
-            else:
-                await update.message.reply_text(
-                    " **לא הצלחתי לזהות פרטי מנוי בתמונה**\n\n"
-                    " **טיפים לצילום טוב יותר:**\n"
-                    " ודא שהטקסט ברור וקריא\n"
-                    " צלם ישר (ללא זווית)\n"
-                    " הימנע מצללים\n"
-                    " התמקד בחלק עם פרטי החיוב\n\n"
-                    "או השתמש ב-/add_subscription להוספה ידנית "
-                )
-                
-        except Exception as e:
-            logger.error(f"OCR Error: {e}")
-            await processing_msg.delete()
-            await update.message.reply_text(
-                " **שגיאה בעיבוד התמונה**\n\n"
-                "נסה שוב עם תמונה אחרת או השתמש ב-/add_subscription "
-            )
+        return ADD_DATE
 
-    def enhance_image_for_ocr(self, image):
-        """שיפור איכות תמונה לOCR"""
-        from PIL import ImageEnhance, ImageFilter
-        
-        # המרה לגווני אפור
-        if image.mode != 'L':
-            image = image.convert('L')
-        
-        # שיפור ניגודיות
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(2.0)
-        
-        # שיפור חדות
-        image = image.filter(ImageFilter.SHARPEN)
-        
-        return image
-
-    def advanced_parse_billing_text(self, text: str) -> Optional[Dict]:
-        """ניתוח מתקדם של טקסט חיוב"""
-        text_clean = text.lower().strip()
-        confidence = 0.0
-        
-        # רגקסים מתקדמים לזיהוי סכומים
-        amount_patterns = [
-            (r'(\d+\.?\d*)\s*', '', 0.9),
-            (r'(\d+\.?\d*)\s*שקל', '', 0.8),
-            (r'\$(\d+\.?\d*)', '$', 0.9),
-            (r'(\d+\.?\d*)\s*usd', '$', 0.8),
-            (r'(\d+\.?\d*)', '', 0.9),
-            (r'(\d+\.?\d*)\s*eur', '', 0.8),
-            (r'(\d+\.?\d*)\s*nis', '', 0.7)
-        ]
-        
-        # זיהוי סכום ומטבע
-        amount = None
-        currency = ''
-        amount_confidence = 0.0
-        
-        for pattern, curr, conf in amount_patterns:
-            matches = re.finditer(pattern, text_clean)
-            for match in matches:
-                potential_amount = float(match.group(1))
-                # סינון סכומים הגיוניים למנויים
-                if 5 <= potential_amount <= 1000:
-                    amount = potential_amount
-                    currency = curr
-                    amount_confidence = conf
-                    break
-            if amount:
-                break
-        
-        # זיהוי שם שירות מתקדם
-        service_name = None
-        service_confidence = 0.0
-        
-        # חיפוש בשירותים הידועים
-        for service in Config.COMMON_SERVICES:
-            service_words = service.lower().split()
-            if all(word in text_clean for word in service_words):
-                service_name = service
-                service_confidence = 0.9
-                break
-            elif any(word in text_clean for word in service_words):
-                service_name = service
-                service_confidence = 0.6
-        
-        # אם לא נמצא שירות ידוע, חיפוש בהיוריסטיקות
-        if not service_name:
-            # חיפוש מילים באנגלית שיכולות להיות שמות חברות
-            company_patterns = [
-                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',  # שמות חברות באנגלית
-                r'([a-zA-Z]{3,}\.com)',  # כתובות אתרים
-                r'([A-Z]{2,})'  # ראשי תיבות
-            ]
-            
-            for pattern in company_patterns:
-                matches = re.findall(pattern, text)
-                if matches:
-                    # בחירת המילה הכי סבירה
-                    for match in matches:
-                        if len(match) >= 3 and match.lower() not in ['the', 'and', 'for', 'you']:
-                            service_name = match.strip()
-                            service_confidence = 0.4
-                            break
-                    if service_name:
-                        break
-        
-        # חישוב ציון ביטחון כולל
-        if amount or service_name:
-            confidence = (amount_confidence + service_confidence) / 2
-            
-            return {
-                'service': service_name,
-                'amount': amount,
-                'currency': currency,
-                'confidence': confidence,
-                'raw_text': text[:200]  # שמירת חלק מהטקסט המקורי
-            }
-        
-        return None
-
-    async def show_ocr_results(self, update, parsed_data, context):
-        """הצגת תוצאות OCR למשתמש"""
-        service = parsed_data.get('service', 'לא זוהה')
-        amount = parsed_data.get('amount', 'לא זוהה')
-        currency = parsed_data.get('currency', '')
-        confidence = parsed_data.get('confidence', 0)
-        
-        confidence_emoji = "" if confidence > 0.8 else "" if confidence > 0.6 else ""
-        
-        confirmation_text = f"""
-{confidence_emoji} **זיהוי אוטומטי מהתמונה**
-
- **שירות:** {service}
- **סכום:** {amount} {currency}
- **רמת ביטחון:** {confidence*100:.0f}%
-
-**האם הפרטים נכונים?**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton(" נכון! הוסף מנוי", callback_data=f"ocr_confirm_{service}_{amount}_{currency}")],
-            [InlineKeyboardButton(" ערוך פרטים", callback_data="ocr_edit")],
-            [InlineKeyboardButton(" נסה שוב", callback_data="ocr_retry")],
-            [InlineKeyboardButton(" ביטול", callback_data="ocr_cancel")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(confirmation_text, reply_markup=reply_markup, parse_mode='Markdown')
-        
-        # שמירת הנתונים לשימוש מאוחר יותר
-        context.user_data['ocr_data'] = parsed_data
-
-    async def my_subscriptions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הצגת כל המנויים של המשתמש"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_subscriptions")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, service_name, amount, currency, billing_day, category, notes, created_at
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1
-            ORDER BY billing_day ASC
-        ''', (user_id,))
-        
-        subscriptions = cursor.fetchall()
-        conn.close()
-        
-        if not subscriptions:
-            await update.message.reply_text(
-                " **אין לך מנויים רשומים עדיין**\n\n"
-                " **התחל עכשיו:**\n"
-                "/add_subscription - הוסף מנוי ראשון\n"
-                "או שלח צילום מסך של חיוב לזיהוי אוטומטי! "
-            )
-            return
-        
-        # חישוב סטטיסטיקות בסיסיות
-        total_monthly = sum(sub[2] for sub in subscriptions)  # amount
-        total_yearly = total_monthly * 12
-        
-        header_text = f"""
- **המנויים שלך ({len(subscriptions)} פעילים)**
-
- **סיכום הוצאות:**
- חודשי: {total_monthly:.2f}
- שנתי: {total_yearly:.2f}
-
- **רשימת מנויים:**
-        """
-        
-        # בניית רשימת המנויים
-        subscriptions_text = ""
-        for i, (sub_id, service, amount, currency, billing_day, category, notes, created_at) in enumerate(subscriptions, 1):
-            category_emoji = self.get_category_emoji(category)
-            subscriptions_text += f"\n{i}. {category_emoji} **{service}**\n"
-            subscriptions_text += f"    {amount} {currency}   {billing_day} בחודש\n"
-            subscriptions_text += f"   /edit_{sub_id}  /delete_{sub_id}\n"
-        
-        full_text = header_text + subscriptions_text
-        
-        # הוספת כפתורי פעולה
-        keyboard = [
-            [InlineKeyboardButton(" הוסף מנוי", callback_data="quick_add")],
-            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats"), 
-             InlineKeyboardButton(" ניתוח", callback_data="analytics")],
-            [InlineKeyboardButton(" תשלומים קרובים", callback_data="upcoming"),
-             InlineKeyboardButton(" הגדרות", callback_data="settings")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(full_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    def get_category_emoji(self, category):
-        """החזרת אמוג'י לפי קטגוריה"""
-        emoji_map = {
-            'streaming': '',
-            'music': '',
-            'productivity': '',
-            'cloud': '',
-            'software': '',
-            'gaming': '',
-            'news': '',
-            'fitness': '',
-            'education': '',
-            'communication': '',
-            'financial': '',
-            'other': ''
-        }
-        return emoji_map.get(category, '')
-
-    async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הצגת סטטיסטיקות מנויים"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_stats")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # סטטיסטיקות בסיסיות
-        cursor.execute('SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND is_active = 1', (user_id,))
-        total_subs = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT SUM(amount) FROM subscriptions WHERE user_id = ? AND is_active = 1', (user_id,))
-        monthly_total = cursor.fetchone()[0] or 0
-        
-        # סטטיסטיקות לפי קטגוריה
-        cursor.execute('''
-            SELECT category, COUNT(*), SUM(amount) 
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1 
-            GROUP BY category 
-            ORDER BY SUM(amount) DESC
-        ''', (user_id,))
-        categories = cursor.fetchall()
-        
-        # סטטיסטיקות לפי מטבע
-        cursor.execute('''
-            SELECT currency, COUNT(*), SUM(amount) 
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1 
-            GROUP BY currency
-        ''', (user_id,))
-        currencies = cursor.fetchall()
-        
-        conn.close()
-        
-        if total_subs == 0:
-            await update.message.reply_text(" אין נתונים להצגה. הוסף מנויים תחילה!")
-            return
-        
-        yearly_total = monthly_total * 12
-        average_sub = monthly_total / total_subs if total_subs > 0 else 0
-        
-        stats_text = f"""
- **סטטיסטיקות המנויים שלך**
-
- **סיכום כספי:**
- מנויים פעילים: {total_subs}
- הוצאה חודשית: {monthly_total:.2f}
- הוצאה שנתית: {yearly_total:.2f}
- ממוצע למנוי: {average_sub:.2f}
-
- **פילוח לפי קטגוריות:**
-        """
-        
-        for category, count, amount in categories:
-            emoji = self.get_category_emoji(category)
-            percentage = (amount / monthly_total * 100) if monthly_total > 0 else 0
-            stats_text += f"{emoji} {category}: {count} מנויים  {amount:.2f} ({percentage:.1f}%)\n"
-        
-        if len(currencies) > 1:
-            stats_text += f"\n **פילוח לפי מטבע:**\n"
-            for currency, count, amount in currencies:
-                stats_text += f"{currency}: {count} מנויים  {amount:.2f}\n"
-        
-        # הוספת תובנות
-        stats_text += f"\n **תובנות:**\n"
-        if yearly_total > 1000:
-            stats_text += f" אתה מוציא מעל 1,000 בשנה על מנויים!\n"
-        if total_subs > 5:
-            stats_text += f" יש לך {total_subs} מנויים - שקול לבדוק אילו אתה באמת משתמש\n"
-        
-        keyboard = [
-            [InlineKeyboardButton(" ניתוח מתקדם", callback_data="analytics")],
-            [InlineKeyboardButton(" תשלומים קרובים", callback_data="upcoming")],
-            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(stats_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def analytics_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ניתוח מתקדם והמלצות חיסכון"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_analytics")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # קבלת כל המנויים
-        cursor.execute('''
-            SELECT service_name, amount, currency, category, created_at, last_reminder_sent
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1
-        ''', (user_id,))
-        subscriptions = cursor.fetchall()
-        
-        conn.close()
-        
-        if not subscriptions:
-            await update.message.reply_text(" אין מנויים לניתוח. הוסף מנויים תחילה!")
-            return
-        
-        total_monthly = sum(sub[1] for sub in subscriptions)
-        
-        analytics_text = f"""
- **ניתוח מתקדם - Subscriber_tracking**
-
- **ניתוח כספי:**
- הוצאה חודשית: {total_monthly:.2f}
- הוצאה שנתית: {total_monthly * 12:.2f}
- כ-{(total_monthly / 10000 * 100):.1f}% מהכנסה ממוצעת
-
- **המלצות חיסכון:**
-        """
-        
-        # המלצות מותאמות אישית
-        recommendations = []
-        
-        # בדיקת מנויים יקרים
-        expensive_subs = [sub for sub in subscriptions if sub[1] > 50]
-        if expensive_subs:
-            recommendations.append(f" יש לך {len(expensive_subs)} מנויים יקרים - שקול חלופות זולות יותר")
-        
-        # בדיקת מנויים דומים
-        streaming_subs = [sub for sub in subscriptions if sub[3] == 'streaming']
-        if len(streaming_subs) > 2:
-            recommendations.append(f" {len(streaming_subs)} שירותי סטרימינג - אולי אפשר להסתפק בפחות?")
-        
-        # בדיקת מנויים ישנים
-        old_subs = []
-        from datetime import datetime, timedelta
-        six_months_ago = datetime.now() - timedelta(days=180)
-        for sub in subscriptions:
-            try:
-                created_date = datetime.strptime(sub[4], "%Y-%m-%d %H:%M:%S")
-                if created_date < six_months_ago:
-                    old_subs.append(sub)
-            except:
-                pass
-        
-        if old_subs:
-            recommendations.append(f" יש לך {len(old_subs)} מנויים מעל 6 חודשים - מתי בדקת אותם לאחרונה?")
-        
-        if not recommendations:
-            recommendations.append(" נראה שאתה מנהל היטב את המנויים שלך!")
-        
-        for i, rec in enumerate(recommendations, 1):
-            analytics_text += f"{i}. {rec}\n"
-        
-        # חישוב פוטנציאל חיסכון
-        potential_savings = 0
-        if len(streaming_subs) > 2:
-            potential_savings += (len(streaming_subs) - 2) * 30  # ממוצע מנוי סטרימינג
-        if expensive_subs:
-            potential_savings += len(expensive_subs) * 20  # הנחת חיסכון ממוצעת
-        
-        if potential_savings > 0:
-            analytics_text += f"\n **פוטנציאל חיסכון:** עד {potential_savings:.0f} בחודש!"
-        
-        analytics_text += f"\n **השוואה:**\n"
-        analytics_text += f" ממוצע ישראלי: ~180 בחודש\n"
-        analytics_text += f" המנויים שלך: {total_monthly:.2f}\n"
-        
-        if total_monthly > 180:
-            analytics_text += f" אתה מעל הממוצע ב-{total_monthly - 180:.2f} "
-        else:
-            analytics_text += f" אתה מתחת לממוצע! חיסכון של {180 - total_monthly:.2f} "
-        
-        keyboard = [
-            [InlineKeyboardButton(" טיפים לחיסכון", callback_data="savings_tips")],
-            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")],
-            [InlineKeyboardButton(" המנויים שלי", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(analytics_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def categories_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ניהול קטגוריות מנויים"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_categories")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        # קבלת פילוח קטגוריות
-        cursor.execute('''
-            SELECT category, COUNT(*), SUM(amount), AVG(amount)
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1 
-            GROUP BY category 
-            ORDER BY SUM(amount) DESC
-        ''', (user_id,))
-        categories = cursor.fetchall()
-        
-        conn.close()
-        
-        if not categories:
-            await update.message.reply_text(" אין מנויים לפי קטגוריות. הוסף מנויים תחילה!")
-            return
-        
-        categories_text = f"""
- **ניהול קטגוריות - {len(categories)} קטגוריות**
-
- **פילוח הוצאות לפי קטגוריה:**
-        """
-        
-        total_amount = sum(cat[2] for cat in categories)
-        
-        for category, count, amount, avg_amount in categories:
-            emoji = self.get_category_emoji(category)
-            percentage = (amount / total_amount * 100) if total_amount > 0 else 0
-            categories_text += f"\n{emoji} **{category.title()}**\n"
-            categories_text += f"    {count} מנויים  {amount:.2f} ({percentage:.1f}%)\n"
-            categories_text += f"    ממוצע: {avg_amount:.2f} למנוי\n"
-        
-        categories_text += f"\n **הקטגוריה היקרה ביותר:** {categories[0][0].title()}"
-        categories_text += f"\n **הקטגוריה הפופולרית ביותר:** {max(categories, key=lambda x: x[1])[0].title()}"
-        
-        keyboard = [
-            [InlineKeyboardButton(" סטטיסטיקות מלאות", callback_data="stats")],
-            [InlineKeyboardButton(" ניתוח מתקדם", callback_data="analytics")],
-            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(categories_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def upcoming_payments_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הצגת תשלומים קרובים"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_upcoming")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT service_name, amount, currency, billing_day, category
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1
-            ORDER BY billing_day ASC
-        ''', (user_id,))
-        
-        subscriptions = cursor.fetchall()
-        conn.close()
-        
-        if not subscriptions:
-            await update.message.reply_text(" אין מנויים פעילים לתצוגת תשלומים קרובים.")
-            return
-        
-        from datetime import datetime, timedelta
-        
-        today = datetime.now().day
-        current_month = datetime.now().month
-        current_year = datetime.now().year
-        
-        upcoming_text = f"""
- **תשלומים קרובים (30 יום)**
-
- **היום: {today}/{current_month}**
-        """
-        
-        upcoming_subs = []
-        total_upcoming = 0
-        
-        for service, amount, currency, billing_day, category in subscriptions:
-            emoji = self.get_category_emoji(category)
-            
-            # חישוב ימים עד החיוב הבא
-            if billing_day >= today:
-                days_until = billing_day - today
-                next_date = f"{billing_day}/{current_month}"
-            else:
-                # החיוב בחודש הבא
-                next_month = current_month + 1 if current_month < 12 else 1
-                days_until = (30 - today) + billing_day  # קירוב
-                next_date = f"{billing_day}/{next_month}"
-            
-            if days_until <= 30:
-                upcoming_subs.append((days_until, service, amount, currency, emoji, next_date))
-                total_upcoming += amount
-        
-        # מיון לפי ימים עד החיוב
-        upcoming_subs.sort(key=lambda x: x[0])
-        
-        if not upcoming_subs:
-            upcoming_text += "\n אין תשלומים ב-30 הימים הקרובים!"
-        else:
-            upcoming_text += f"\n **סך תשלומים צפויים:** {total_upcoming:.2f}\n"
-            
-            for days, service, amount, currency, emoji, next_date in upcoming_subs:
-                if days == 0:
-                    upcoming_text += f"\n **היום:** {emoji} {service} - {amount} {currency}"
-                elif days == 1:
-                    upcoming_text += f"\n **מחר:** {emoji} {service} - {amount} {currency}"
-                elif days <= 7:
-                    upcoming_text += f"\n **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
-                else:
-                    upcoming_text += f"\n **בעוד {days} ימים ({next_date}):** {emoji} {service} - {amount} {currency}"
-        
-        # הוספת טיפים
-        upcoming_text += f"\n\n **טיפ:** בדוק אילו מנויים אתה באמת משתמש לפני התחדשותם!"
-        
-        keyboard = [
-            [InlineKeyboardButton(" כל המנויים", callback_data="my_subs")],
-            [InlineKeyboardButton(" הגדרת התראות", callback_data="settings")],
-            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(upcoming_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def export_data_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ייצוא נתוני המנויים"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "export_data")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT service_name, amount, currency, billing_day, category, notes, created_at
-            FROM subscriptions 
-            WHERE user_id = ? AND is_active = 1
-            ORDER BY service_name
-        ''', (user_id,))
-        
-        subscriptions = cursor.fetchall()
-        conn.close()
-        
-        if not subscriptions:
-            await update.message.reply_text(" אין נתונים לייצוא. הוסף מנויים תחילה!")
-            return
-        
-        # יצירת נתונים בפורמט CSV
-        csv_content = "שירות,סכום,מטבע,יום_חיוב,קטגוריה,הערות,תאריך_יצירה\n"
-        
-        for service, amount, currency, billing_day, category, notes, created_at in subscriptions:
-            notes = notes or ""
-            csv_content += f'"{service}",{amount},"{currency}",{billing_day},"{category}","{notes}","{created_at}"\n'
-        
-        # יצירת סיכום
-        total_monthly = sum(sub[1] for sub in subscriptions)
-        summary = f"""
- **ייצוא נתונים הושלם**
-
- **סיכום:**
- {len(subscriptions)} מנויים פעילים
- הוצאה חודשית: {total_monthly:.2f}
- הוצאה שנתית: {total_monthly * 12:.2f}
-
- **הנתונים:**
-{csv_content}
-
- **הנתונים מוכנים להעתקה ושמירה כקובץ CSV**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")],
-            [InlineKeyboardButton(" רשימת מנויים", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(summary, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def settings_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הגדרות משתמש"""
-        user_id = update.effective_user.id
-        self.log_user_action(user_id, "view_settings")
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM user_settings WHERE user_id = ?', (user_id,))
-        settings = cursor.fetchone()
-        
-        conn.close()
-        
-        if not settings:
-            self.ensure_user_settings(user_id)
-            settings = (user_id, 'Asia/Jerusalem', '09:00', 'he', '', 1, 1, None, None)
-        
-        settings_text = f"""
- **הגדרות Subscriber_tracking**
-
- **התראות:**
- שעת התראה: {settings[2]}
- התראות שבועיות: {'פעיל' if settings[5] else 'כבוי'}
-
- **הגדרות כלליות:**
- אזור זמן: {settings[1]}
- שפה: {settings[3]}
- מטבע מועדף: {settings[4]}
-
- **פיצ'רים חכמים:**
- המלצות חכמות: {'פעיל' if settings[6] else 'כבוי'}
- OCR (זיהוי מתמונות): {'פעיל' if Config.ENABLE_OCR else 'כבוי'}
-
- **טיפ:** הגדרות אלו משפיעות על חוויית השימוש שלך
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton(" שינוי שעת התראה", callback_data="settings_notifications")],
-            [InlineKeyboardButton(" שינוי מטבע", callback_data="settings_currency")],
-            [InlineKeyboardButton(" פיצ'רים חכמים", callback_data="settings_features")],
-            [InlineKeyboardButton(" חזרה", callback_data="main_menu")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(settings_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def edit_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """עריכת מנוי קיים"""
-        # קבלת מספר המנוי מהמסר
-        sub_id = int(update.message.text.split('_')[1])
-        user_id = update.effective_user.id
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT service_name, amount, currency, billing_day, category, notes
-            FROM subscriptions 
-            WHERE id = ? AND user_id = ? AND is_active = 1
-        ''', (sub_id, user_id))
-        
-        subscription = cursor.fetchone()
-        conn.close()
-        
-        if not subscription:
-            await update.message.reply_text(" מנוי לא נמצא או שאין לך הרשאה לערוך אותו.")
-            return
-        
-        service, amount, currency, billing_day, category, notes = subscription
-        notes = notes or "אין הערות"
-        
-        edit_text = f"""
- **עריכת מנוי: {service}**
-
- **פרטים נוכחיים:**
-  סכום: {amount} {currency}
-  יום חיוב: {billing_day}
-  קטגוריה: {category}
-  הערות: {notes}
-
-**מה תרצה לערוך?**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton(" סכום", callback_data=f"edit_amount_{sub_id}")],
-            [InlineKeyboardButton(" יום חיוב", callback_data=f"edit_billing_{sub_id}")],
-            [InlineKeyboardButton(" קטגוריה", callback_data=f"edit_category_{sub_id}")],
-            [InlineKeyboardButton(" הערות", callback_data=f"edit_notes_{sub_id}")],
-            [InlineKeyboardButton(" חזרה למנויים", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(edit_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def delete_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """מחיקת מנוי"""
-        # קבלת מספר המנוי מהמסר
-        sub_id = int(update.message.text.split('_')[1])
-        user_id = update.effective_user.id
-        
-        conn = sqlite3.connect(Config.DATABASE_PATH)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT service_name, amount, currency
-            FROM subscriptions 
-            WHERE id = ? AND user_id = ? AND is_active = 1
-        ''', (sub_id, user_id))
-        
-        subscription = cursor.fetchone()
-        
-        if not subscription:
-            conn.close()
-            await update.message.reply_text(" מנוי לא נמצא או שאין לך הרשאה למחוק אותו.")
-            return
-        
-        service, amount, currency = subscription
-        
-        delete_text = f"""
- **מחיקת מנוי**
-
- **אתה עומד למחוק:**
- **שירות:** {service}
- **סכום:** {amount} {currency}
-
-**האם אתה בטוח? הפעולה בלתי הפיכה!**
-        """
-        
-        keyboard = [
-            [InlineKeyboardButton(" כן, מחק", callback_data=f"confirm_delete_{sub_id}")],
-            [InlineKeyboardButton(" ביטול", callback_data="my_subs")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        conn.close()
-        await update.message.reply_text(delete_text, reply_markup=reply_markup, parse_mode='Markdown')
-
-    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """ביטול פעולה נוכחית"""
+    async def add_currency_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        currency = update.message.text.strip().upper()
+        context.user_data['currency'] = currency
         await update.message.reply_text(
-            " **פעולה בוטלה**\n\n"
-            " חזרה לתפריט הראשי:\n"
-            "/start - תפריט ראשי\n"
-            "/my_subs - המנויים שלי\n"
-            "/help - עזרה"
-        )
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    async def add_currency(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הוספת מטבע מותאם אישית"""
-        currency_input = update.message.text.strip()
-        
-        # בדיקה שהמטבע לא ריק ולא ארוך מדי
-        if not currency_input or len(currency_input) > 5:
-            await update.message.reply_text(
-                " מטבע לא חוקי. נסה שוב:\n"
-                "(לדוגמה: , CHF, , RUB)"
-            )
-            return ADD_CURRENCY
-        
-        context.user_data['currency'] = currency_input
-        
-        await update.message.reply_text(
-            f" **מטבע נשמר:** {currency_input}\n\n"
-            " **באיזה תאריך בחודש יש חיוב?**\n\n"
-            "הכנס מספר בין 1-28\n"
-            "(לדוגמה: 15 = חמישה עשר בכל חודש)\n\n"
-            " **למה עד 28?** כדי להימנע מבעיות בחודשים קצרים"
+             f"✅ מטבע: **{currency}**.\n\n"
+            "**באיזה יום בחודש מתבצע החיוב?** (מספר בין 1-28)"
         )
         return ADD_DATE
 
     async def add_date(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """הוספת תאריך חיוב וסיום התהליך"""
         try:
-            billing_day = int(update.message.text.strip())
-            
-            if not 1 <= billing_day <= 28:
-                await update.message.reply_text(
-                    " תאריך לא חוקי. הכנס מספר בין 1-28:\n"
-                    "(לדוגמה: 15 לחמישה עשר בחודש)"
-                )
+            day = int(update.message.text.strip())
+            if not 1 <= day <= 28:
+                await update.message.reply_text("יום החיוב חייב להיות בין 1 ל-28. נסה שוב:")
                 return ADD_DATE
-            
-            # שמירת המנוי במסד הנתונים
+
+            # All data collected, save to DB
             user_id = update.effective_user.id
-            service_name = context.user_data['service_name']
-            amount = context.user_data['amount']
-            currency = context.user_data['currency']
-            category = context.user_data.get('detected_category', 'other')
-            
-            conn = sqlite3.connect(Config.DATABASE_PATH)
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO subscriptions (user_id, service_name, amount, currency, billing_day, category)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, service_name, amount, currency, billing_day, category))
-            
-            conn.commit()
-            conn.close()
-            
-            # רישום פעילות
-            self.log_user_action(user_id, "subscription_added", metadata=f"{service_name}_{amount}_{currency}")
-            
-            success_text = f"""
- **מנוי נוסף בהצלחה!**
-
- **שירות:** {service_name}
- **סכום:** {amount} {currency}
- **יום חיוב:** {billing_day} בכל חודש
- **קטגוריה:** {category}
-
- **תזכורות:** תקבל התראה שבוע ויום לפני כל חיוב
-
- **מה הלאה?**
-            """
-            
-            keyboard = [
-                [InlineKeyboardButton(" ראה את כל המנויים", callback_data="my_subs")],
-                [InlineKeyboardButton(" הוסף מנוי נוסף", callback_data="quick_add")],
-                [InlineKeyboardButton(" סטטיסטיקות", callback_data="stats")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(success_text, reply_markup=reply_markup, parse_mode='Markdown')
-            
-            # ניקוי נתוני ההקשר
-            context.user_data.clear()
-            return ConversationHandler.END
-            
-        except ValueError:
-            await update.message.reply_text(
-                " נסה להכניס מספר חוקי בין 1-28:\n"
-                "(לדוגמה: 15)"
+            ud = context.user_data
+            self.db.add_subscription(
+                user_id, ud['service_name'], ud['amount'], ud['currency'], day, ud['detected_category']
             )
+            self.db.log_user_action(user_id, "add_subscription_finish")
+
+            await update.message.reply_text(
+                f"🎉 **מעולה! המנוי נוסף בהצלחה.**\n\n"
+                f"שירות: {ud['service_name']}\n"
+                f"סכום: {ud['amount']} {ud['currency']}\n"
+                f"יום חיוב: {day} בחודש\n\n"
+                "אזכיר לך לפני החיוב הבא. צפה בכל המנויים עם /my_subs."
+            )
+            ud.clear()
+            return ConversationHandler.END
+        except (ValueError, TypeError):
+            await update.message.reply_text("זה לא נראה כמספר תקין. הקלד יום בחודש (1-28):")
             return ADD_DATE
 
-    async def handle_screenshot(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """טיפול בצילום מסך ללא OCR"""
-        await update.message.reply_text(
-            " **קיבלתי את התמונה!**\n\n"
-            " **זיהוי אוטומטי לא זמין כרגע**\n"
-            "השתמש ב-/add_subscription להוספה ידנית\n\n"
-            " **טיפ:** אם יש לך פרטי החיוב, אני יכול לעזור לך להוסיף אותם במהירות!"
-        )
+    async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        context.user_data.clear()
+        await update.message.reply_text("הפעולה בוטלה. לחץ /start כדי להתחיל מחדש.")
+        return ConversationHandler.END
 
-    async def handle_quick_actions(self, query, context):
-        """טיפול בפעולות מהירות"""
-        if query.data == "quick_add":
-            await query.edit_message_text(
-                " **הוספת מנוי מהירה**\n\n"
-                "לחץ על /add_subscription להתחלת התהליך המלא\n"
-                "או שלח צילום מסך לזיהוי אוטומטי! "
-            )
-        elif query.data == "demo":
-            demo_text = """
- **דמו - Subscriber_tracking Bot**
 
-**מה אני יכול לעשות בשבילך:**
+    # --- Edit/Delete Handlers ---
+    async def edit_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        sub_id = int(context.matches[0].group(1))
+        # This will be implemented in a future version with another conversation handler.
+        await update.message.reply_text(f"פיצ'ר עריכת מנוי #{sub_id} יפותח בהמשך.")
 
- **ניהול מנויים:**
- הוספה קלה עם /add_subscription
- צפייה בכל המנויים עם /my_subs
- עריכה ומחיקה פשוטה
-
- **ניתוח והתובנות:**
- סטטיסטיקות מפורטות (/stats)
- ניתוח חכם והמלצות (/analytics)
- תשלומים קרובים (/upcoming)
-
- **תזכורות אוטומטיות:**
- שבוע לפני כל חיוב
- יום לפני כל חיוב
- ניתן להתאים בהגדרות
-
- **פיצ'רים חכמים:**
- זיהוי אוטומטי מצילומי מסך
- זיהוי קטגוריות אוטומטי
- המלצות חיסכון מותאמות
-
- **מוכן להתחיל? לחץ /add_subscription**
-            """
-            await query.edit_message_text(demo_text)
-        else:
-            await query.edit_message_text("פעולה לא זוהתה. נסה שוב.")
-
-    async def _process_ocr_actions(self, query, context):
-        """Internal helper – processes OCR-related inline-button actions."""
-        if query.data.startswith("ocr_confirm_"):
-            # עיבוד אישור OCR
-            parts = query.data.split('_')
-            service = parts[2]
-            amount = float(parts[3])
-            currency = parts[4]
-            
-            # המשך עם תהליך הוספת מנוי
-            context.user_data['service_name'] = service
-            context.user_data['amount'] = amount
-            context.user_data['currency'] = currency
-            
-            await query.edit_message_text(
-                f" **מאושר!**\n\n"
-                f" {service}\n {amount} {currency}\n\n"
-                " **באיזה תאריך בחודש יש חיוב?** (1-28)"
-            )
-        elif query.data == "ocr_edit":
-            await query.edit_message_text(
-                " **עריכת פרטים**\n\n"
-                "השתמש ב-/add_subscription להוספה ידנית\n"
-                "כך תוכל לעדכן את כל הפרטים לפי הצורך."
-            )
-        elif query.data == "ocr_retry":
-            await query.edit_message_text(
-                " **נסה שוב**\n\n"
-                "שלח צילום מסך נוסף או השתמש ב-/add_subscription להוספה ידנית."
-            )
-        elif query.data == "ocr_cancel":
-            await query.edit_message_text(
-                " **פעולה בוטלה**\n\n"
-                "לחץ /start לחזרה לתפריט הראשי"
-            )
-
-    async def handle_ocr_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """CallbackQueryHandler entry point for OCR actions – delegates to _process_ocr_actions."""
-        query = update.callback_query
-        if query is None:
-            logger.warning("handle_ocr_actions triggered without callback query")
-            return
-        await query.answer()
-        return await self._process_ocr_actions(query, context)
-
-    # המשך הקוד עם כל הפונקציות הנותרות...
-    # (כמו stats_command, analytics_command, וכו')
-
-    # ------------------------------------------------------------------
-    # Bot lifecycle management
-    async def run(self):
-        """Launch the bot using Application.run_polling while keeping the
-        current asyncio event-loop alive.
-
-        • Uses only `run_polling(close_loop=False)` (no initialize/start/idle)
-        • Starts the APScheduler (if available) before polling begins
-        • Since PTB ≥ 21 `run_polling()` is await-able when `close_loop=False`,
-          so we can simply `await` it without spawning extra threads.
-        """
-
-        # 🛠️ Ensure handlers are registered before starting scheduler
-        self.setup_handlers()
-
-        # 1️⃣  Start the scheduler (if configured)
-        if self.scheduler:
-            try:
-                self.scheduler.start()
-                logger.info("✅ Scheduler started")
-            except Exception as e:
-                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
-        else:
-            logger.warning("⚠️ Scheduler is None")
-
-        # 2️⃣  Verify the Application instance was built successfully
-        if not self.app:
-            logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+    async def delete_subscription_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        sub_id = int(context.matches[0].group(1))
+        
+        sub = self.db.get_subscription_by_id(sub_id, user_id)
+        if not sub:
+            await update.message.reply_text("מנוי לא נמצא או שאין לך הרשאה למחוק אותו.")
             return
 
-        logger.info("▶️ Starting bot polling via Application.run_polling() …")
-
+        text = f"אתה בטוח שברצונך למחוק את המנוי **{sub['service_name']}** ({sub['amount']} {sub['currency']})?"
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ כן, מחק", callback_data=f"confirm_delete_{sub_id}"),
+                InlineKeyboardButton("❌ לא, בטל", callback_data="cancel_delete")
+            ]
+        ]
+        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(keyboard))
+        
+    # --- OCR Handler ---
+    async def handle_screenshot_ocr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        processing_msg = await update.message.reply_text("🖼️ קיבלתי את התמונה, מנסה לזהות פרטים...")
         try:
-            # PTB ≥ 21: run_polling is fully awaitable when close_loop=False.
-            # It encapsulates initialization, startup, polling and graceful shutdown,
-            # so we don't need to call `initialize()`, `start()` or the Updater helpers.
-            await self.app.run_polling(close_loop=False)
+            photo_file = await update.message.photo[-1].get_file()
+            image_bytes = io.BytesIO()
+            await photo_file.download_to_memory(image_bytes)
+            image_bytes.seek(0)
+            
+            image = Image.open(image_bytes).convert('L') # Grayscale
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(2.0) # Increase contrast
+            
+            text = pytesseract.image_to_string(image, lang='heb+eng')
+            # For now, we just show the text. Parsing logic can be added here.
+            await processing_msg.edit_text(f"**טקסט שזוהה מהתמונה:**\n\n`{text[:500]}`\n\nפיצ'ר הזיהוי האוטומטי עדיין בפיתוח. בינתיים, אפשר להשתמש ב-/add_subscription.", parse_mode='Markdown')
+
         except Exception as e:
-            logger.exception(f"❌ Unexpected error inside bot: {e}")
+            logger.error(f"OCR failed: {e}")
+            await processing_msg.edit_text("שגיאה בעיבוד התמונה. אנא נסה שוב או השתמש ב-/add_subscription.")
 
-        # סיום מתודת run
+    # --- General Handlers ---
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """A general handler for many inline buttons."""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = query.effective_user.id
+        data = query.data
 
-# טיפול בסיגנלים ל־Render
-def signal_handler(sig, frame):
-    logger.info(" Received shutdown signal, gracefully stopping...")
-    sys.exit(0)
+        if data.startswith("confirm_delete_"):
+            sub_id = int(data.split('_')[2])
+            sub = self.db.get_subscription_by_id(sub_id, user_id)
+            if sub:
+                self.db.delete_subscription(sub_id, user_id)
+                await query.edit_message_text(f"🗑️ המנוי **{sub['service_name']}** נמחק.")
+                self.db.log_user_action(user_id, f"delete_subscription_confirm_{sub_id}")
+            else:
+                await query.edit_message_text("המנוי כבר נמחק או שלא ניתן היה למצוא אותו.")
+        
+        elif data == "cancel_delete":
+            await query.edit_message_text("פעולת המחיקה בוטלה.")
+        
+        elif data == "add_new_sub":
+            await query.edit_message_text("כדי להוסיף מנוי חדש, הקלד את הפקודה:\n/add_subscription")
 
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
+    async def handle_unknown_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await update.message.reply_text("לא הבנתי את הפקודה. 🤔\nנסה /help כדי לראות מה אני יודע לעשות.")
 
-def get_telegram_app():
+    # --- Helper Methods ---
+    def get_category_emoji(self, category: str) -> str:
+        emoji_map = {
+            'streaming': '📺', 'music': '🎵', 'productivity': '📈', 'cloud': '☁️',
+            'software': '💻', 'gaming': '🎮', 'news': '📰', 'fitness': '🏋️‍♀️',
+            'education': '🎓', 'communication': '💬', 'financial': '🏦', 'other': '📌'
+        }
+        return emoji_map.get(category, '📌')
+
+    def detect_service_category(self, service_name: str) -> str:
+        service_lower = service_name.lower()
+        category_keywords = {
+            'streaming': ['netflix', 'disney', 'amazon prime', 'hbo', 'hulu', 'apple tv', 'yes+', 'sting', 'cellcom tv'],
+            'music': ['spotify', 'apple music', 'youtube music', 'deezer', 'tidal'],
+            'productivity': ['office', 'microsoft 365', 'notion', 'slack', 'zoom', 'asana', 'trello'],
+            'cloud': ['dropbox', 'google drive', 'icloud', 'one drive'],
+            'software': ['adobe', 'photoshop', 'figma', 'canva', 'github', 'autocad'],
+            'gaming': ['xbox', 'playstation', 'steam', 'nintendo'],
+            'fitness': ['gym', 'strava', 'myfitnesspal']
+        }
+        for category, keywords in category_keywords.items():
+            if any(keyword in service_lower for keyword in keywords):
+                return category
+        return 'other'
+
+    # --- Bot Lifecycle ---
+    def run(self):
+        """Set up handlers and run the bot."""
+        self.setup_handlers()
+        
+        if self.scheduler:
+            # You can add scheduled jobs here, e.g., for daily reminders
+            # self.scheduler.add_job(...)
+            self.scheduler.start()
+            logger.info("Scheduler started.")
+
+        logger.info("Bot is starting to poll...")
+        self.app.run_polling()
+
+
+def main():
+    """Main function to setup and run the bot."""
     try:
-        bot = SubscriberTrackingBot()
-        return bot.app
+        token = Config.validate_token()
+        bot = SubscriberTrackingBot(token)
+        bot.run()
     except ValueError as e:
-        logger.error(f"Failed to create Telegram app: {e}")
-        raise
+        logger.critical(f"FATAL: Configuration error - {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.critical(f"FATAL: An unexpected error occurred: {e}")
+        sys.exit(1)
 
-# הפעלה ישירה (אופציונלי) – ללא שימוש ב-asyncio.run()
+# --- Entry Point ---
 if __name__ == "__main__":
-    import nest_asyncio, asyncio
-    nest_asyncio.apply()
-    loop = asyncio.get_event_loop()
-    bot = SubscriberTrackingBot()
-    loop.create_task(bot.run())
-    loop.run_forever()
+    main()
+
