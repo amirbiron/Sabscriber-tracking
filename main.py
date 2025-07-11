@@ -20,6 +20,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Apply nest_asyncio immediately to patch running loops
+nest_asyncio.apply()
+
 # Dummy HTTP server עבור Render (כדי לשמור על פורט פתוח)
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -63,16 +66,9 @@ if __name__ == "__main__":
     # הפעלת השרת המדומה כ-thread נפרד
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
-    # לולאת asyncio ל-Render – מטפלים במקרה שהלולאה כבר רצה
+    # יצירת לולאת asyncio ראשית (Render)
     loop = asyncio.get_event_loop()
 
-    if loop.is_running():
-        logger.warning("⚠️ Event loop already running. Applying nest_asyncio and scheduling start_bot() ...")
-        nest_asyncio.apply()
-        loop.create_task(start_bot())
-    else:
-        # אם הלולאה עדיין לא רצה, פשוט מריצים את הקורוטינה וכותבים run_forever לאחר מכן
-        loop.run_until_complete(start_bot())
-
-    # השאר את הלולאה חיה תמיד – חיוני ב-Render
+    # יצירת משימת הבוט והרצת הלולאה לנצח
+    loop.create_task(start_bot())
     loop.run_forever()
