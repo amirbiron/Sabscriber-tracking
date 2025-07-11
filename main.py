@@ -5,9 +5,11 @@
 
 import os
 import logging
+# Third-party
 import requests
 import asyncio
 import threading
+import nest_asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from bot_logic import SubscriberTrackingBot
 
@@ -61,7 +63,16 @@ if __name__ == "__main__":
     # הפעלת השרת המדומה כ-thread נפרד
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
-    # לולאת asyncio ל-Render – גישה פשוטה
+    # לולאת asyncio ל-Render – מטפלים במקרה שהלולאה כבר רצה
     loop = asyncio.get_event_loop()
-    loop.create_task(start_bot())
+
+    if loop.is_running():
+        logger.warning("⚠️ Event loop already running. Applying nest_asyncio and scheduling start_bot() ...")
+        nest_asyncio.apply()
+        loop.create_task(start_bot())
+    else:
+        # אם הלולאה עדיין לא רצה, פשוט מריצים את הקורוטינה וכותבים run_forever לאחר מכן
+        loop.run_until_complete(start_bot())
+
+    # השאר את הלולאה חיה תמיד – חיוני ב-Render
     loop.run_forever()
