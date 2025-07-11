@@ -1678,11 +1678,11 @@ class SubscriberTrackingBot:
             message = f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
 
         try:
-    bot = Bot(self.token)
-    await bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
-    logger.info(f" Notification sent successfully to user {user_id}")
-except Exception as e:
-    logger.error(f" Failed to send notification to user {user_id}: {e}")
+            bot = Bot(self.token)
+            await bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
+            logger.info(f" Notification sent successfully to user {user_id}")
+        except Exception as e:
+            logger.error(f" Failed to send notification to user {user_id}: {e}")
 
 # טיפול בסיגנלים ל־Render
 def signal_handler(sig, frame):
