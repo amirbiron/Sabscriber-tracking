@@ -240,8 +240,7 @@ class SubscriberTrackingBot:
 
     def setup_handlers(self):
         """הגדרת handlers של Subscriber_tracking"""
-        # Command handlers
-        self.app.add_handler(CommandHandler("start", self.start_command))
+        # Command handlers (the /start handler is added dynamically in run())
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("about", self.about_command))
         self.app.add_handler(CommandHandler("my_subs", self.my_subscriptions_command))
@@ -278,48 +277,9 @@ class SubscriberTrackingBot:
         else:
             self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot))
 
-    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """פקודת התחלה של Subscriber_tracking"""
-        user_id = update.effective_user.id
-        first_name = update.effective_user.first_name or "Friend"
-        
-        # רישום משתמש חדש
-        self.ensure_user_settings(user_id)
-        self.log_user_action(user_id, "start")
-        
-        welcome_text = f"""
- **ברוך הבא ל-Subscriber_tracking!** 
-
-שלום {first_name}! 
-אני הבוט החכם שיעזור לך לנהל את כל המנויים שלך בקלות!
-
- **מה אני יכול לעשות:**
-  מעקב חכם אחרי כל המנויים
-  תזכורות לפני כל חיוב
-  ניתוח הוצאות וחיסכון
-  זיהוי אוטומטי מתמונות
-  המלצות אישיות לחיסכון
-
- **בואו נתחיל:**
-/add_subscription - הוסף מנוי ראשון
-/my_subs - ראה את המנויים שלך  
-/help - מדריך מלא
-
- **טיפ מקצועי:** שלח לי צילום מסך של חיוב ואני אזהה הכל בשבילך אוטומטי!
-
-מוכן להתחיל לחסוך כסף? 
-        """
-        
-        # הוספת כפתורים לפעולות מהירות
-        keyboard = [
-            [InlineKeyboardButton(" הוסף מנוי ראשון", callback_data="quick_add")],
-            [InlineKeyboardButton(" צפה בדמו", callback_data="demo"), 
-             InlineKeyboardButton(" הגדרות", callback_data="settings")],
-            [InlineKeyboardButton(" עזרה", callback_data="help")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Responds to the /start command with a simple health-check message."""
+        await update.message.reply_text("👋 היי! הבוט מחובר ועובד ✅")
 
     async def about_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """מידע על Subscriber_tracking"""
@@ -1595,6 +1555,9 @@ class SubscriberTrackingBot:
 
         if self.app:
             try:
+                # Add /start handler (simple health-check)
+                self.app.add_handler(CommandHandler("start", self.start))
+
                 logger.info("▶️ Starting bot polling...")
                 await self.app.initialize()
                 await self.app.start()
