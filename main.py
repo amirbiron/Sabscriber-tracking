@@ -34,16 +34,13 @@ def main():
         bot = SubscriberTrackingBot()
         logger.info("📡 Bot initialized")
 
-        # Start scheduler if defined
-        if getattr(bot, "scheduler", None):
-            try:
-                bot.scheduler.start()
-                logger.info("✅ Scheduler started")
-            except Exception as e:
-                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+        # Run bot inside asyncio event loop so that scheduler can start safely
+        import asyncio
 
-        logger.info("▶️ Running bot polling…")
-        bot.app.run_polling()
+        async def _run_bot():
+            await bot.run()
+
+        asyncio.run(_run_bot())
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
