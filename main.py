@@ -8,6 +8,8 @@ import logging
 import requests
 import asyncio
 from bot_logic import SubscriberTrackingBot
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 
 # לוגים
 logging.basicConfig(
@@ -15,6 +17,22 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Dummy server ל-Render (כדי לזהות פורט פתוח)
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write("Subscriber_tracking Bot is alive".encode("utf-8"))  # ← שים לב לתיקון הזה!
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8000))
+    server = HTTPServer(("0.0.0.0", port), DummyHandler)
+    logger.info(f"🌐 Dummy server running on port {port}")
+    server.serve_forever()
+
+# הרץ את השרת ב-thread נפרד לפני הפעלת הבוט
+threading.Thread(target=run_dummy_server, daemon=True).start()
 
 async def start_bot():
     logger.info("🚀 Starting Subscriber_tracking Bot...")
@@ -37,32 +55,7 @@ async def start_bot():
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
-class DummyHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write("✅ Subscriber_tracking Bot is alive".encode("utf-8"))
-
-def run_dummy_server():
-    port = int(os.environ.get("PORT", 8000))  # Render מצפה ל־PORT
-    server = HTTPServer(("0.0.0.0", port), DummyHandler)
-    logger.info(f"🌐 Dummy server running on port {port}")
-    server.serve_forever()
-
-# הרץ את השרת הדמה כ־Thread נפרד
-threading.Thread(target=run_dummy_server, daemon=True).start()
-
+# הרצה בטוחה
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            logger.warning("⚠️ Event loop is already running. Using create_task and run_forever()...")
-            loop.create_task(start_bot())
-            loop.run_forever()
-        else:
-            loop.run_until_complete(start_bot())
-    except RuntimeError:
-        asyncio.run(start_bot())
+    asyncio.run(start_bot())
