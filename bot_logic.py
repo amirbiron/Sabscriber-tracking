@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERROR#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
  Subscriber_tracking Bot
@@ -1549,8 +1549,8 @@ class SubscriberTrackingBot:
 
         • Uses only `run_polling(close_loop=False)` (no initialize/start/idle)
         • Starts the APScheduler (if available) before polling begins
-        • Runs `run_polling` inside a thread via ``asyncio`` executor so this
-          coroutine remains non-blocking and the global loop stays open.
+        • Since PTB ≥ 21 `run_polling()` is await-able when `close_loop=False`,
+          so we can simply `await` it without spawning extra threads.
         """
 
         # 1️⃣  Start the scheduler (if configured)
@@ -1574,15 +1574,12 @@ class SubscriberTrackingBot:
         logger.info("▶️ Starting bot polling via run_polling() …")
 
         try:
-            # `run_polling` is synchronous & blocking ➡️ off-load to a thread
-            from functools import partial
-            loop = asyncio.get_running_loop()
-            polling_task = partial(
-                self.app.run_polling,
+            # In PTB ≥ 21 `run_polling` can be awaited directly when
+            # close_loop=False, making the startup sequence MUCH simpler.
+            await self.app.run_polling(
                 close_loop=False,
                 drop_pending_updates=True,
             )
-            await loop.run_in_executor(None, polling_task)
         except Exception as e:
             logger.exception(f"❌ Unexpected error inside bot: {e}")
 
