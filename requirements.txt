@@ -3,4 +3,3 @@ apscheduler
 pillow
 pytesseract
 python-dotenv
-aiohttp
