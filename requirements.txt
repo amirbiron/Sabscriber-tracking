@@ -1,6 +1,6 @@
-python-telegram-bot==20.0
+python-telegram-bot==20.6
 apscheduler
 pillow
 pytesseract
 python-dotenv
-nest-asyncio
+aiohttp
