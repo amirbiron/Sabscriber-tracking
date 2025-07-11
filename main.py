@@ -1,11 +1,10 @@
-# main.py
+# main.py (גרסה מינימלית לבדיקה)
 import os
 import logging
 import asyncio
-from aiohttp import web
 
-from config import Config
-from bot_logic import SubscriberTrackingBot
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # הגדרת לוגינג
 logging.basicConfig(
@@ -14,58 +13,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# פונקציית start פשוטה
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Sends a message when the command /start is issued."""
+    await update.message.reply_text('היי! הבוט המינימלי עובד!')
 
-async def web_server_handler(request):
-    """עונה לבקשות GET כדי ש-Render ידע שהשירות פעיל."""
-    return web.Response(text="Bot service is alive.")
-
-
-async def main():
-    """
-    הפונקציה הראשית שמפעילה את הבוט ואת שרת הרקע באופן אסינכרוני.
-    """
-    # קבלת טוקן
-    try:
-        token = Config.validate_token()
-    except ValueError as e:
-        logger.critical(f"🚨 Configuration error: {e}")
+async def main() -> None:
+    """הפונקציה הראשית שמפעילה את הבוט המינימלי."""
+    
+    # קריאת הטוקן ישירות כאן
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        logger.critical("TELEGRAM_BOT_TOKEN environment variable not set!")
         return
 
-    # יצירת הבוט
-    bot = SubscriberTrackingBot(token=token)
+    # יצירת האפליקציה
+    app = Application.builder().token(token).build()
 
-    # הגדרת שרת ה-Web של aiohttp
-    app = web.Application()
-    app.router.add_get('/', web_server_handler)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    
-    port = int(os.environ.get('PORT', 10000))
-    site = web.TCPSite(runner, '0.0.0.0', port)
+    # הוספת פקודת start בלבד
+    app.add_handler(CommandHandler("start", start))
 
-    logger.info(f"🚀 Starting bot and web server on port {port}...")
+    logger.info("Starting minimal bot...")
     
+    # הרצת הבוט
     try:
-        # הפעלת הבוט ושרת הרקע במקביל
-        await bot.run_async()
-        await site.start()
-        
-        # השאר את התוכנית רצה לנצח
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        logger.info("Minimal bot is polling.")
+        # השאר את התוכנית רצה
         await asyncio.Event().wait()
-        
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Shutdown signal received.")
     finally:
         # כיבוי מבוקר
-        logger.info("Shutting down...")
-        await bot.stop_async()
-        await runner.cleanup()
-        logger.info("Shutdown complete.")
+        logger.info("Shutting down minimal bot.")
+        if app.updater.running:
+            await app.updater.stop()
+        await app.stop()
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        logger.critical(f"❌ A critical error caused the application to stop: {e}")
-
+    asyncio.run(main())
