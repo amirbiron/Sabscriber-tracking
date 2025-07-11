@@ -1583,165 +1583,23 @@ class SubscriberTrackingBot:
     # ------------------------------------------------------------------
     # Bot lifecycle management
     async def run(self):
-        """הפעלת הבוט בלולאת asyncio קיימת, ללא יצירת לולאה חדשה."""
-        logger.info("🚀 Subscriber_tracking Bot starting...")
-        logger.info(f"🔢 Version: {self.bot_info['version']}")
-        logger.info(f"🗃️ Database: {Config.DATABASE_PATH}")
-        logger.info(
-            f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}"
-        )
-        logger.info(f"🌐 Port: {Config.PORT}")
-        logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
-
-        # Start the scheduler shortly after the event-loop starts
-        if self.scheduler:
-            asyncio.create_task(self._start_scheduler())
-        else:
-            logger.warning("⚠️ Scheduler is None")
-
-        # Run the bot – this is the ONLY place we start polling
-        try:
-            await self.app.run_polling(close_loop=False, shutdown_loop=False)
-        except Exception as e:
-            # Graceful shutdown if polling fails
-            await self.app.shutdown()
-            logger.error(f"❌ Bot polling failed: {e}")
-
-    async def _start_scheduler(self):
-        """Helper coroutine to start the scheduler after a short delay."""
-        try:
-            await asyncio.sleep(0.1)
-            self.scheduler.start()
-            logger.info("✅ Scheduler started")
-        except Exception as e:
-            logger.warning(f"⚠️ Scheduler couldn't start: {e}")
-
-    async def check_and_send_notifications(self):
-        """בדיקה ושליחת התראות יומית"""
-        try:
-            logger.info(" Checking for notifications to send...")
-            conn = sqlite3.connect(Config.DATABASE_PATH)
-            cursor = conn.cursor()
-            today = datetime.now().date()
-
-            cursor.execute(
-                '''
-                SELECT n.id, n.subscription_id, n.notification_type, s.user_id, 
-                       s.service_name, s.amount, s.currency
-                FROM notifications n
-                JOIN subscriptions s ON n.subscription_id = s.id
-                WHERE n.notification_date = ? AND n.sent = 0 AND s.is_active = 1
-                ''',
-                (today,),
-            )
-
-            notifications = cursor.fetchall()
-            if notifications:
-                logger.info(f" Found {len(notifications)} notifications to send")
-
-            for n in notifications:
-                notif_id, _, notif_type, user_id, name, amount, currency = n
-                await self.send_notification(
-                    user_id,
-                    {"service_name": name, "amount": amount, "currency": currency},
-                    notif_type,
-                )
-                cursor.execute("UPDATE notifications SET sent = 1 WHERE id = ?", (notif_id,))
-                logger.info(f" Notification sent to user {user_id} for {name}")
-
-            conn.commit()
-            conn.close()
-
-            if not notifications:
-                logger.info(" No notifications to send today")
-
-        except Exception as e:
-            logger.error(f" Error in notification check: {e}")
-
-    async def send_notification(self, user_id: int, subscription_data: dict, notification_type: str):
-        """שליחת הודעת התראה למשתמש"""
-        name = subscription_data["service_name"]
-        amount = subscription_data["amount"]
-        currency = subscription_data["currency"]
-
-        if notification_type == "week_before":
-            message = (
-                f" תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n סכום: {amount} {currency}"
-            )
-        elif notification_type == "day_before":
-            message = (
-                f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
-            )
-        else:
-            message = f" עדכון לגבי {name}"
-
-        try:
-            bot = Bot(self.token)
-            await bot.send_message(
-                chat_id=user_id, text=message, parse_mode="Markdown"
-            )
-            logger.info(f" Notification sent successfully to user {user_id}")
-        except Exception as e:
-            logger.error(f" Failed to send notification to user {user_id}: {e}")
-
-import os
-import logging
-import signal
-import sys
-import sqlite3
-from datetime import datetime
-from apscheduler.triggers.cron import CronTrigger
-from telegram.ext import ApplicationBuilder
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-logger = logging.getLogger(__name__)
-
-class SubscriberTrackingBot:
-    def __init__(self):
-        self.token = os.getenv("TELEGRAM_BOT_TOKEN")
-        self.bot_info = {"version": "1.0"}
-        self.scheduler = AsyncIOScheduler(timezone="Asia/Jerusalem")
-        self.app = ApplicationBuilder().token(self.token).build()
-
-    async def run(self):
-        """הפעלת Subscriber_tracking Bot ב-Render"""
-        logger.info("🚀 Subscriber_tracking Bot starting on Render...")
-        logger.info(f"🔢 Version: {self.bot_info['version']}")
-        logger.info(f"🗃️ Database: {Config.DATABASE_PATH}")
-        logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-        logger.info(f"🌐 Port: {Config.PORT}")
-        logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
-
-        # הפעלת מתזמן ההתראות
         if self.scheduler:
             try:
-                import asyncio
-
-                async def start_scheduler_later():
-                    await asyncio.sleep(0.1)
-                    self.scheduler.start()
-
-                asyncio.create_task(start_scheduler_later())
-                logger.info("✅ Scheduler scheduled to start")
+                self.scheduler.start()
+                logger.info("✅ Scheduler started")
             except Exception as e:
-                logger.warning(f"⚠️ Scheduler couldn't schedule: {e}")
+                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
         else:
             logger.warning("⚠️ Scheduler is None")
 
-        # הפעלת הבוט
         if self.app:
-            logger.info("▶️ Starting bot polling...")
-
-            # הרצת poll-loop מחוץ ל-try/except – אם הלולאה קורסת, האירוע יועבר
-            # ישירות ללולאת asyncio ללא סגירה כפויה שלה.
-            await self.app.run_polling(close_loop=False, shutdown_loop=False)
-
-            # נסיון כיבוי מסודר לאחר סיום/ביטול ה-polling.
             try:
-                await asyncio.sleep(0.1)  # פינוי הלולאה לפני shutdown
-                await self.app.shutdown()
-            except Exception as shutdown_error:
-                logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
+                logger.info("▶️ Starting bot polling...")
+                await self.app.initialize()
+                await self.app.start()
+                await self.app.updater.start_polling()
+            except Exception as e:
+                logger.exception(f"❌ Unexpected error inside bot: {e}")
         else:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
 
