@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERROR#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
  Subscriber_tracking Bot
@@ -1763,15 +1763,6 @@ def get_telegram_app():
         logger.error(f"Failed to create Telegram app: {e}")
         raise
 
-if __name__ == "__main__":
-    import asyncio
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "asyncio.run()" in str(e) and "event loop is running" in str(e):
-            import nest_asyncio
-            nest_asyncio.apply()
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(main())
-        else:
-            raise
+# Legacy CLI disabled – use main.py as the entry-point
+if False:
+    pass
