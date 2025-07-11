@@ -1544,6 +1544,16 @@ class SubscriberTrackingBot:
     # ------------------------------------------------------------------
     # Bot lifecycle management
     async def run(self):
+        """Launch the bot using Application.run_polling while keeping the
+        current asyncio event-loop alive.
+
+        • Uses only `run_polling(close_loop=False)` (no initialize/start/idle)
+        • Starts the APScheduler (if available) before polling begins
+        • Runs `run_polling` inside a thread via ``asyncio`` executor so this
+          coroutine remains non-blocking and the global loop stays open.
+        """
+
+        # 1️⃣  Start the scheduler (if configured)
         if self.scheduler:
             try:
                 self.scheduler.start()
@@ -1553,19 +1563,28 @@ class SubscriberTrackingBot:
         else:
             logger.warning("⚠️ Scheduler is None")
 
-        if self.app:
-            try:
-                # Add /start handler (simple health-check)
-                self.app.add_handler(CommandHandler("start", self.start))
-
-                logger.info("▶️ Starting bot polling...")
-                await self.app.initialize()
-                await self.app.start()
-                await self.app.updater.start_polling()
-            except Exception as e:
-                logger.exception(f"❌ Unexpected error inside bot: {e}")
-        else:
+        # 2️⃣  Verify the Application instance was built successfully
+        if not self.app:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+            return
+
+        # Ensure the /start health-check handler is registered exactly once
+        self.app.add_handler(CommandHandler("start", self.start))
+
+        logger.info("▶️ Starting bot polling via run_polling() …")
+
+        try:
+            # `run_polling` is synchronous & blocking ➡️ off-load to a thread
+            from functools import partial
+            loop = asyncio.get_running_loop()
+            polling_task = partial(
+                self.app.run_polling,
+                close_loop=False,
+                drop_pending_updates=True,
+            )
+            await loop.run_in_executor(None, polling_task)
+        except Exception as e:
+            logger.exception(f"❌ Unexpected error inside bot: {e}")
 
         # סיום מתודת run
 
