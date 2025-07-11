@@ -73,3 +73,6 @@
 2025-07-11 10:04:51,482 - bot_logic - WARNING - OCR not available - pytesseract/tesseract not installed
 2025-07-11 10:04:51,485 - bot_logic - INFO - Requests support available
 2025-07-11 10:19:51,723 - bot_logic - INFO -  Received shutdown signal, gracefully stopping...
+2025-07-11 10:48:04,441 - bot_logic - INFO - File logging enabled
+2025-07-11 10:48:04,456 - bot_logic - WARNING - OCR not available - pytesseract/tesseract not installed
+2025-07-11 10:48:04,499 - bot_logic - INFO - Requests support available
