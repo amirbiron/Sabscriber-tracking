@@ -69,6 +69,10 @@ if __name__ == "__main__":
             loop.create_task(start_bot())
             loop.run_forever()
         else:
-            loop.run_until_complete(start_bot())
+            loop.create_task(start_bot())
+            loop.run_forever()
     except RuntimeError:
-        asyncio.run(start_bot())
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        new_loop.create_task(start_bot())
+        new_loop.run_forever()
