@@ -3,6 +3,11 @@ import logging
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# --- התיקון לקונפליקט של asyncio ---
+import nest_asyncio
+nest_asyncio.apply()
+# ------------------------------------
+
 # ודא שהייבוא תואם לשמות הקבצים שלך
 from config import Config
 from bot_logic import SubscriberTrackingBot
@@ -15,7 +20,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- שרת דמה (Keep-Alive) עבור Render ---
-# Render דורש שהשירות "יאזין" ל-PORT מסוים. שרת זה עונה על הדרישה.
 class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """עונה לבקשות GET עם הודעת "חי"."""
