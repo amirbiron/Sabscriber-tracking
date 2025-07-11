@@ -1617,21 +1617,20 @@ class SubscriberTrackingBot:
         else:
             logger.warning("⚠️ Scheduler is None")
 
-       if self.app:
-    try:
-        logger.info("▶️ Starting bot polling...")
-        await self.app.run_polling()
-    except Exception as e:
-        logger.warning("⚠️ Attempting graceful shutdown...")
-        try:
-            await self.app.shutdown()
-        except Exception as shutdown_error:
-            logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
-        logger.error(f"❌ Bot polling failed: {e}")
-else:
-    logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+        if self.app:
+            try:
+                logger.info("▶️ Starting bot polling...")
+                await self.app.run_polling()
+            except Exception as e:
+                logger.warning("⚠️ Attempting graceful shutdown...")
+                try:
+                    await self.app.shutdown()
+                except Exception as shutdown_error:
+                    logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
+                logger.error(f"❌ Bot polling failed: {e}")
+        else:
+            logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
 
-        
         # סיום מתודת run
 
     async def check_and_send_notifications(self):
