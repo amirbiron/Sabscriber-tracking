@@ -1600,37 +1600,36 @@ class SubscriberTrackingBot:
         self.app = ApplicationBuilder().token(self.token).build()
 
     async def run(self):
-        """הפעלת Subscriber_tracking Bot ב-Render"""
-        logger.info("🚀 Subscriber_tracking Bot starting on Render...")
-        logger.info(f"🔢 Version: {self.bot_info['version']}")
-        logger.info(f"🗃️ Database: {Config.DATABASE_PATH}")
-        logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
-        logger.info(f"🌐 Port: {Config.PORT}")
-        logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
+    """הפעלת Subscriber_tracking Bot ב-Render"""
+    logger.info("🚀 Subscriber_tracking Bot starting on Render...")
+    logger.info(f"🔢 Version: {self.bot_info['version']}")
+    logger.info(f"🗃️ Database: {Config.DATABASE_PATH}")
+    logger.info(f"⏰ Notifications: {Config.NOTIFICATION_HOUR:02d}:{Config.NOTIFICATION_MINUTE:02d}")
+    logger.info(f"🌐 Port: {Config.PORT}")
+    logger.info(f"🔐 Token: {'Configured' if self.token else 'Missing'}")
 
-        if self.scheduler:
-            try:
-                self.scheduler.start()
-                logger.info("✅ Scheduler started")
-            except Exception as e:
-                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
-        else:
-            logger.warning("⚠️ Scheduler is None")
+    if self.scheduler:
+        try:
+            self.scheduler.start()
+            logger.info("✅ Scheduler started")
+        except Exception as e:
+            logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+    else:
+        logger.warning("⚠️ Scheduler is None")
 
-        if self.app:
+    if self.app:
+        try:
+            logger.info("▶️ Starting bot polling...")
+            await self.app.run_polling()
+        except Exception as e:
+            logger.warning("⚠️ Attempting graceful shutdown...")
             try:
-                logger.info("▶️ Starting bot polling...")
-                await self.app.run_polling()
-            except Exception as e:
-                logger.warning("⚠️ Attempting graceful shutdown...")
-                try:
-                    await self.app.shutdown()
-                except Exception as shutdown_error:
-                    logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
-                finally:
-                    logger.error(f"❌ Bot polling failed: {e}")
-        else:
-            logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+                await self.app.shutdown()
+            except Exception as shutdown_error:
+                logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
+            logger.error(f"❌ Bot polling failed: {e}")
+    else:
+        logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
 
         # סיום מתודת run
 
