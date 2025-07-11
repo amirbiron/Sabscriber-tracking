@@ -1611,10 +1611,16 @@ class SubscriberTrackingBot:
         # הפעלת מתזמן ההתראות
         if self.scheduler:
             try:
-                self.scheduler.start()
-                logger.info("✅ Scheduler started")
+                import asyncio
+
+                async def start_scheduler_later():
+                    await asyncio.sleep(0.1)
+                    self.scheduler.start()
+
+                asyncio.create_task(start_scheduler_later())
+                logger.info("✅ Scheduler scheduled to start")
             except Exception as e:
-                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+                logger.warning(f"⚠️ Scheduler couldn't schedule: {e}")
         else:
             logger.warning("⚠️ Scheduler is None")
 
