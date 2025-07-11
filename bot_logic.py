@@ -126,7 +126,8 @@ class SubscriberTrackingBot:
                 'description': 'בוט ניהול מנויים אישי חכם'
             }
             self.init_database()
-            self.setup_handlers()
+            # Handlers will be set up inside run() to comply with new design
+            # self.setup_handlers() removed
         except ValueError as e:
             logger.error(f"Configuration error: {e}")
             raise
@@ -240,9 +241,13 @@ class SubscriberTrackingBot:
         logger.info(" Database initialized successfully")
 
     def setup_handlers(self):
-        """הגדרת handlers של Subscriber_tracking"""
-        # Command handlers (the /start handler is added dynamically in run())
-        self.app.add_handler(CommandHandler("help", self.help_command))
+        """Register all command and message handlers for the bot."""
+        # Core commands requested
+        self.app.add_handler(CommandHandler("start", self.start))
+        self.app.add_handler(CommandHandler("summary", self.summary_command))
+        self.app.add_handler(CommandHandler("help", self.help))
+
+        # Additional commands already supported
         self.app.add_handler(CommandHandler("about", self.about_command))
         self.app.add_handler(CommandHandler("my_subs", self.my_subscriptions_command))
         self.app.add_handler(CommandHandler("stats", self.stats_command))
@@ -251,18 +256,17 @@ class SubscriberTrackingBot:
         self.app.add_handler(CommandHandler("upcoming", self.upcoming_payments_command))
         self.app.add_handler(CommandHandler("export", self.export_data_command))
         self.app.add_handler(CommandHandler("settings", self.settings_command))
-        
-        # Core handlers required for health-check & quick interactions (PTB ≥ 21)
-        self.app.add_handler(CommandHandler("start", self.start))
         self.app.add_handler(CommandHandler("add_subscription", self.add_subscription))
+
+        # Text messages
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
+
+        # Callback and pattern handlers
         self.app.add_handler(CallbackQueryHandler(self.handle_ocr_actions))
-        
-        # Pattern handlers for editing/deleting
         self.app.add_handler(MessageHandler(filters.Regex(r'^/edit_\d+$'), self.edit_subscription_command))
         self.app.add_handler(MessageHandler(filters.Regex(r'^/delete_\d+$'), self.delete_subscription_command))
-        
-        # Conversation handlers
+
+        # Conversation handler for adding subscription
         add_conv_handler = ConversationHandler(
             entry_points=[CommandHandler("add_subscription", self.add_subscription_start)],
             states={
@@ -274,11 +278,8 @@ class SubscriberTrackingBot:
             fallbacks=[CommandHandler("cancel", self.cancel)],
         )
         self.app.add_handler(add_conv_handler)
-        
-        # Callback handlers
-        self.app.add_handler(CallbackQueryHandler(self.button_callback))
-        
-        # Photo handler for OCR
+
+        # Photo handlers
         if OCR_AVAILABLE and Config.ENABLE_OCR:
             self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot_ocr))
         else:
@@ -331,6 +332,14 @@ class SubscriberTrackingBot:
         """
         
         await update.message.reply_text(about_text, parse_mode='Markdown')
+
+    async def summary_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """סיכום נתונים למשתמש – תשובת ברירת מחדל"""
+        await update.message.reply_text("תודה שפנית אליי!")
+
+    async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """עטיפה עבור help_command כדי להשאיר תאימות לפקודת /help."""
+        await self.help_command(update, context)
 
     def ensure_user_settings(self, user_id: int):
         """וידוא שקיימות הגדרות למשתמש"""
@@ -1579,6 +1588,9 @@ class SubscriberTrackingBot:
           so we can simply `await` it without spawning extra threads.
         """
 
+        # 🛠️ Ensure handlers are registered before starting scheduler
+        self.setup_handlers()
+
         # 1️⃣  Start the scheduler (if configured)
         if self.scheduler:
             try:
@@ -1593,9 +1605,6 @@ class SubscriberTrackingBot:
         if not self.app:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
             return
-
-        # Ensure the /start health-check handler is registered exactly once
-        self.app.add_handler(CommandHandler("start", self.start))
 
         logger.info("▶️ Starting bot polling via Application.run_polling() …")
 
