@@ -46,7 +46,7 @@ class SubscriberTrackingBot:
             [KeyboardButton("📊 סטטיסטיקות"), KeyboardButton("🗓️ תשלומים קרובים")],
             [KeyboardButton("⚙️ הגדרות"), KeyboardButton("❓ עזרה")]
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, persistent=True)
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, persistent=True, one_time_keyboard=False)
 
     def get_inline_main_menu(self):
         """מחזיר כפתורי תפריט ראשי כ-inline"""
@@ -167,7 +167,7 @@ class SubscriberTrackingBot:
 📱 **איך להתחיל:**
 לחץ על "➕ הוסף מנוי חדש" כדי להוסיף את המנוי הראשון שלך!
 
-כל הכפתורים זמינים בתפריט למטה 👇"""
+**👇 הכפתורים מופיעים מתחת לתיבת הטקסט 👇**"""
         
         await update.message.reply_text(
             welcome_text, 
@@ -530,6 +530,13 @@ class SubscriberTrackingBot:
         # אם זה callback query
         if update.callback_query:
             await update.callback_query.answer()
+            
+            # Delete the current message first
+            try:
+                await update.callback_query.message.delete()
+            except:
+                pass
+            
             await update.callback_query.message.reply_text(
                 """🎯 **הוספת מנוי חדש**
 
@@ -886,6 +893,12 @@ class SubscriberTrackingBot:
         query = update.callback_query
         user_id = query.effective_user.id
         
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
         # שימוש בלוגיקה קיימת
         original_update = Update(
             update_id=update.update_id,
@@ -898,6 +911,13 @@ class SubscriberTrackingBot:
 
     async def stats_command_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
         original_update = Update(
             update_id=update.update_id,
             message=query.message,
@@ -908,6 +928,13 @@ class SubscriberTrackingBot:
 
     async def upcoming_payments_command_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
         original_update = Update(
             update_id=update.update_id,
             message=query.message,
@@ -918,6 +945,13 @@ class SubscriberTrackingBot:
 
     async def settings_command_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
         original_update = Update(
             update_id=update.update_id,
             message=query.message,
@@ -928,6 +962,13 @@ class SubscriberTrackingBot:
 
     async def help_command_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
         original_update = Update(
             update_id=update.update_id,
             message=query.message,
@@ -961,10 +1002,17 @@ class SubscriberTrackingBot:
 
 💡 **טיפ:** השתמש בכפתורי התפריט למטה לגישה מהירה!"""
         
-        await query.edit_message_text(
+        # Delete the current message first
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
+        # Send a new message with the persistent keyboard
+        await query.message.reply_text(
             menu_text,
             parse_mode='Markdown',
-            reply_markup=self.get_inline_main_menu()
+            reply_markup=self.get_main_menu_keyboard()
         )
 
     async def handle_settings_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
