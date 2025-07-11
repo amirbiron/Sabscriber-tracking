@@ -1622,6 +1622,12 @@ class SubscriberTrackingBot:
                 logger.info("▶️ Starting bot polling...")
                 await self.app.run_polling()
             except Exception as e:
+                # Attempt graceful shutdown before logging the failure
+                logger.warning("⚠️ Attempting graceful shutdown...")
+                try:
+                    await self.app.shutdown()
+                except Exception as shutdown_error:
+                    logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
                 logger.error(f"❌ Bot polling failed: {e}")
         else:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
