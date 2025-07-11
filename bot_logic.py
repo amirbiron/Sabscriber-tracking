@@ -21,6 +21,7 @@ from typing import Optional, List, Dict, Tuple
 import io
 from telegram.ext import ApplicationBuilder
 from pathlib import Path
+import sys  # Added for graceful shutdown handling
 
 # הגדרת logging בתחילת הקובץ - לפני כל השאר
 logging.basicConfig(
@@ -251,6 +252,12 @@ class SubscriberTrackingBot:
         self.app.add_handler(CommandHandler("export", self.export_data_command))
         self.app.add_handler(CommandHandler("settings", self.settings_command))
         
+        # Core handlers required for health-check & quick interactions (PTB ≥ 21)
+        self.app.add_handler(CommandHandler("start", self.start))
+        self.app.add_handler(CommandHandler("add_subscription", self.add_subscription))
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
+        self.app.add_handler(CallbackQueryHandler(self.handle_ocr_actions))
+        
         # Pattern handlers for editing/deleting
         self.app.add_handler(MessageHandler(filters.Regex(r'^/edit_\d+$'), self.edit_subscription_command))
         self.app.add_handler(MessageHandler(filters.Regex(r'^/delete_\d+$'), self.delete_subscription_command))
@@ -280,6 +287,16 @@ class SubscriberTrackingBot:
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Responds to the /start command with a simple health-check message."""
         await update.message.reply_text("👋 היי! הבוט מחובר ועובד ✅")
+
+    async def add_subscription(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Alias entry-point for /add_subscription that delegates to the guided flow."""
+        return await self.add_subscription_start(update, context)
+
+    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Generic fallback for plain-text messages outside recognised flows."""
+        await update.message.reply_text(
+            "🤖 לא זיהיתי פקודה. הקלד /help לרשימת פקודות או /add_subscription כדי להוסיף מנוי."
+        )
 
     async def about_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """מידע על Subscriber_tracking"""
@@ -553,7 +570,7 @@ class SubscriberTrackingBot:
         elif query.data.startswith("quick_"):
             return await self.handle_quick_actions(query, context)
         elif query.data.startswith("ocr_"):
-            return await self.handle_ocr_actions(query, context)
+            return await self._process_ocr_actions(query, context)
         else:
             await query.edit_message_text("פעולה לא מזוהה.")
 
@@ -1502,8 +1519,8 @@ class SubscriberTrackingBot:
         else:
             await query.edit_message_text("פעולה לא זוהתה. נסה שוב.")
 
-    async def handle_ocr_actions(self, query, context):
-        """טיפול בפעולות OCR"""
+    async def _process_ocr_actions(self, query, context):
+        """Internal helper – processes OCR-related inline-button actions."""
         if query.data.startswith("ocr_confirm_"):
             # עיבוד אישור OCR
             parts = query.data.split('_')
@@ -1537,6 +1554,15 @@ class SubscriberTrackingBot:
                 " **פעולה בוטלה**\n\n"
                 "לחץ /start לחזרה לתפריט הראשי"
             )
+
+    async def handle_ocr_actions(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """CallbackQueryHandler entry point for OCR actions – delegates to _process_ocr_actions."""
+        query = update.callback_query
+        if query is None:
+            logger.warning("handle_ocr_actions triggered without callback query")
+            return
+        await query.answer()
+        return await self._process_ocr_actions(query, context)
 
     # המשך הקוד עם כל הפונקציות הנותרות...
     # (כמו stats_command, analytics_command, וכו')
