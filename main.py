@@ -26,7 +26,7 @@ class DummyHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot is alive")
 
 def run_dummy_server():
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 1000))
     server = HTTPServer(("0.0.0.0", port), DummyHandler)
     logger.info(f"🌐 Dummy server running on port {port}")
     server.serve_forever()
