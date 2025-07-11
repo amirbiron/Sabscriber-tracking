@@ -1601,7 +1601,7 @@ class SubscriberTrackingBot:
 
         # Run the bot – this is the ONLY place we start polling
         try:
-            await self.app.run_polling()
+            await self.app.run_polling(close_loop=False, shutdown_loop=False)
         except Exception as e:
             # Graceful shutdown if polling fails
             await self.app.shutdown()
@@ -1734,7 +1734,7 @@ class SubscriberTrackingBot:
 
             # הרצת poll-loop מחוץ ל-try/except – אם הלולאה קורסת, האירוע יועבר
             # ישירות ללולאת asyncio ללא סגירה כפויה שלה.
-            await self.app.run_polling()
+            await self.app.run_polling(close_loop=False, shutdown_loop=False)
 
             # נסיון כיבוי מסודר לאחר סיום/ביטול ה-polling.
             try:
