@@ -41,7 +41,9 @@ async def start_bot():
         return
 
     try:
-        response = requests.post(f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true")
+        response = requests.post(
+            f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true"
+        )
         logger.info(f"🔧 Webhook deleted: {response.json()}")
     except Exception as e:
         logger.warning(f"⚠️ Couldn't delete webhook: {e}")
@@ -50,6 +52,11 @@ async def start_bot():
         bot = SubscriberTrackingBot()
         logger.info("📡 Bot initialized")
         await bot.run()
+
+        # מניעת יציאה מוקדמת מהלולאה
+        while True:
+            await asyncio.sleep(60)
+
     except Exception as e:
         logger.exception(f"❌ Unexpected error inside bot: {e}")
 
@@ -58,13 +65,11 @@ if __name__ == "__main__":
     # הפעלת השרת המדומה כ-thread נפרד
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
-    # שימוש ב-loop חדש למניעת בעיות ב־Render
+    # שימוש בלולאה של asyncio מבלי לסגור אותה (מתאים ל-Render)
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
+        loop = asyncio.get_event_loop()
         if loop.is_running():
-            logger.warning("⚠️ Event loop is already running. Using create_task and run_forever()...")
+            logger.warning("⚠️ Event loop already running. Using create_task...")
             loop.create_task(start_bot())
             loop.run_forever()
         else:
