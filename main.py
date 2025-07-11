@@ -11,14 +11,13 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from bot_logic import SubscriberTrackingBot
 
-# לוגים
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Dummy HTTP server ל־Render
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -31,10 +30,8 @@ def run_dummy_server():
     logger.info(f"🌐 Dummy server running on port {port}")
     server.serve_forever()
 
-# מריץ את שרת ה־Dummy ב־Thread נפרד
 threading.Thread(target=run_dummy_server, daemon=True).start()
 
-# פונקציה להרצת הבוט
 async def start_bot():
     logger.info("🚀 Starting Subscriber_tracking Bot...")
 
@@ -54,17 +51,16 @@ async def start_bot():
         logger.info("📡 Bot initialized")
         await bot.run()
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}")
+        logger.exception(f"❌ Unexpected error inside bot: {e}")
 
-# הרצה שלא תגרום לשגיאת event loop
 if __name__ == "__main__":
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            logger.warning("⚠️ Event loop already running – using create_task()")
+            logger.warning("⚠️ Event loop is already running. Creating task only.")
             loop.create_task(start_bot())
-            loop.run_forever()
         else:
             loop.run_until_complete(start_bot())
-    except RuntimeError:
-        asyncio.run(start_bot())
+        loop.run_forever()
+    except Exception as e:
+        logger.exception(f"❌ Unexpected error: {e}")
