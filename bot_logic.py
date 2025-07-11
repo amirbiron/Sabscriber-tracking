@@ -1620,16 +1620,18 @@ class SubscriberTrackingBot:
 
         # הפעלת הבוט
         if self.app:
+            logger.info("▶️ Starting bot polling...")
+
+            # הרצת poll-loop מחוץ ל-try/except – אם הלולאה קורסת, האירוע יועבר
+            # ישירות ללולאת asyncio ללא סגירה כפויה שלה.
+            await self.app.run_polling()
+
+            # נסיון כיבוי מסודר לאחר סיום/ביטול ה-polling.
             try:
-                logger.info("▶️ Starting bot polling...")
-                await self.app.run_polling()
-            except Exception as e:
-                logger.warning("⚠️ Attempting graceful shutdown...")
-                try:
-                    await self.app.shutdown()
-                except Exception as shutdown_error:
-                    logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
-                logger.error(f"❌ Bot polling failed: {e}")
+                await asyncio.sleep(0.1)  # פינוי הלולאה לפני shutdown
+                await self.app.shutdown()
+            except Exception as shutdown_error:
+                logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
         else:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
 
