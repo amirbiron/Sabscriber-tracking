@@ -1617,20 +1617,20 @@ class SubscriberTrackingBot:
         else:
             logger.warning("⚠️ Scheduler is None")
 
-        if self.app:
-            try:
-                logger.info("▶️ Starting bot polling...")
-                await self.app.run_polling()
-            except Exception as e:
-                # Attempt graceful shutdown before logging the failure
-                logger.warning("⚠️ Attempting graceful shutdown...")
-                try:
-                    await self.app.shutdown()
-                except Exception as shutdown_error:
-                    logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
-                logger.error(f"❌ Bot polling failed: {e}")
-        else:
-            logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+       if self.app:
+    try:
+        logger.info("▶️ Starting bot polling...")
+        await self.app.run_polling()
+    except Exception as e:
+        logger.warning("⚠️ Attempting graceful shutdown...")
+        try:
+            await self.app.shutdown()
+        except Exception as shutdown_error:
+            logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
+        logger.error(f"❌ Bot polling failed: {e}")
+else:
+    logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
+
         
         # סיום מתודת run
 
@@ -1708,17 +1708,13 @@ def get_telegram_app():
 
 if __name__ == "__main__":
     import asyncio
-
-    async def main():
-        print(" Starting Subscriber_tracking Bot...")
-        bot = SubscriberTrackingBot()
-        await bot.run()
-
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        asyncio.run(main())
     except RuntimeError as e:
-        import sys
-        import traceback
-        print("❌ Unexpected error while starting the bot:")
-        traceback.print_exc()
-        sys.exit(1)
+        if "asyncio.run()" in str(e) and "event loop is running" in str(e):
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+        else:
+            raise

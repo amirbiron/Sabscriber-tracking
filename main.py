@@ -39,17 +39,6 @@ async def main():
         logger.error(f"❌ Unexpected error: {e}")
         raise
 
-# 👇 פתרון ללולאות asyncio מתנגשות
+# 👇 הרצה פשוטה ובטוחה - ללא get_event_loop
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            logger.warning("⚠️ Event loop is already running. Scheduling task...")
-            loop.create_task(main())
-            loop.run_forever()  # 🟢 נוספה השורה הזו כדי שהבוט ימשיך לרוץ
-        else:
-            loop.run_until_complete(main())
-    except RuntimeError:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        new_loop.run_until_complete(main())
+    asyncio.run(main())
