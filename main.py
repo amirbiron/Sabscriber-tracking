@@ -1,71 +1,71 @@
+# main.py
 import os
 import logging
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import asyncio
+from aiohttp import web
 
-# --- התיקון לקונפליקט של asyncio ---
-import nest_asyncio
-nest_asyncio.apply()
-# ------------------------------------
-
-# ודא שהייבוא תואם לשמות הקבצים שלך
 from config import Config
 from bot_logic import SubscriberTrackingBot
 
-# הגדרת לוגינג בסיסי
+# הגדרת לוגינג
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# --- שרת דמה (Keep-Alive) עבור Render ---
-class KeepAliveHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        """עונה לבקשות GET עם הודעת "חי"."""
-        self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(b"Bot service is alive.")
 
-def run_dummy_server(port: int):
-    """מריץ את שרת הדמה בכתובת והפורט הנתונים."""
-    server_address = ('', port)
-    try:
-        httpd = HTTPServer(server_address, KeepAliveHandler)
-        logger.info(f"🌐 Dummy server running on port {port}")
-        httpd.serve_forever()
-    except Exception as e:
-        logger.error(f"💥 Dummy server failed: {e}")
+async def web_server_handler(request):
+    """עונה לבקשות GET כדי ש-Render ידע שהשירות פעיל."""
+    return web.Response(text="Bot service is alive.")
 
-# --- פונקציית הפעלת הבוט ---
-def start_bot():
-    """מאמת את הטוקן ומפעיל את הבוט."""
-    logger.info("🚀 Starting Subscriber_tracking Bot...")
+
+async def main():
+    """
+    הפונקציה הראשית שמפעילה את הבוט ואת שרת הרקע באופן אסינכרוני.
+    """
+    # קבלת טוקן
     try:
-        # 1. קבל את הטוקן ממחלקת התצורה
         token = Config.validate_token()
-
-        # 2. צור את אובייקט הבוט והעבר לו את הטוקן
-        bot = SubscriberTrackingBot(token=token)
-        
-        # 3. הפעל את לולאת הריצה של הבוט
-        bot.run()
-
     except ValueError as e:
         logger.critical(f"🚨 Configuration error: {e}")
-    except Exception as e:
-        logger.critical(f"❌ A critical error occurred while starting the bot: {e}")
+        return
 
-# --- נקודת כניסה ראשית ---
-if __name__ == "__main__":
-    # קבל את הפורט ממשתני הסביבה של Render, עם ברירת מחדל
+    # יצירת הבוט
+    bot = SubscriberTrackingBot(token=token)
+
+    # הגדרת שרת ה-Web של aiohttp
+    app = web.Application()
+    app.router.add_get('/', web_server_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
     port = int(os.environ.get('PORT', 10000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
 
-    # הרץ את שרת הדמה בתהליכון (thread) נפרד כדי לא לחסום את הבוט
-    server_thread = threading.Thread(target=run_dummy_server, args=(port,))
-    server_thread.daemon = True  # מאפשר לתוכנית להיסגר גם אם התהליכון רץ
-    server_thread.start()
+    logger.info(f"🚀 Starting bot and web server on port {port}...")
+    
+    try:
+        # הפעלת הבוט ושרת הרקע במקביל
+        await bot.run_async()
+        await site.start()
+        
+        # השאר את התוכנית רצה לנצח
+        await asyncio.Event().wait()
+        
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Shutdown signal received.")
+    finally:
+        # כיבוי מבוקר
+        logger.info("Shutting down...")
+        await bot.stop_async()
+        await runner.cleanup()
+        logger.info("Shutdown complete.")
 
-    # הפעל את הבוט בתהליכון הראשי
-    start_bot()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.critical(f"❌ A critical error caused the application to stop: {e}")
+
