@@ -1702,17 +1702,13 @@ def get_telegram_app():
 
 if __name__ == "__main__":
     import asyncio
-
-    async def main():
-        print(" Starting Subscriber_tracking Bot...")
-        bot = SubscriberTrackingBot()
-        await bot.run()
-
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        asyncio.run(main())
     except RuntimeError as e:
-        import sys
-        import traceback
-        print("❌ Unexpected error while starting the bot:")
-        traceback.print_exc()
-        sys.exit(1)
+        if "asyncio.run()" in str(e) and "event loop is running" in str(e):
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+        else:
+            raise
