@@ -1576,10 +1576,7 @@ class SubscriberTrackingBot:
         try:
             # In PTB ≥ 21 `run_polling` can be awaited directly when
             # close_loop=False, making the startup sequence MUCH simpler.
-            await self.app.run_polling(
-                close_loop=False,
-                drop_pending_updates=True,
-            )
+            await self.app.run_polling(close_loop=False)
         except Exception as e:
             logger.exception(f"❌ Unexpected error inside bot: {e}")
 
