@@ -61,18 +61,7 @@ if __name__ == "__main__":
     # הפעלת השרת המדומה כ-thread נפרד
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
-    # שימוש בלולאה של asyncio מבלי לסגור אותה (מתאים ל-Render)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            logger.warning("⚠️ Event loop already running. Using create_task...")
-            loop.create_task(start_bot())
-            loop.run_forever()
-        else:
-            loop.create_task(start_bot())
-            loop.run_forever()
-    except RuntimeError:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        new_loop.create_task(start_bot())
-        new_loop.run_forever()
+    # לולאת asyncio ל-Render – גישה פשוטה
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_bot())
+    loop.run_forever()
