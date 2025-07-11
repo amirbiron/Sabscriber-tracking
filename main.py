@@ -6,7 +6,6 @@
 import os
 import logging
 import requests
-import asyncio
 from bot_logic import SubscriberTrackingBot
 
 # לוגים
@@ -16,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def main():
+def main():
     """הפעלת הבוט"""
     logger.info("🚀 Starting Subscriber_tracking Bot...")
 
@@ -34,11 +33,21 @@ async def main():
     try:
         bot = SubscriberTrackingBot()
         logger.info("📡 Bot initialized")
-        await bot.run()
+
+        # Start scheduler if defined
+        if getattr(bot, "scheduler", None):
+            try:
+                bot.scheduler.start()
+                logger.info("✅ Scheduler started")
+            except Exception as e:
+                logger.warning(f"⚠️ Scheduler couldn't start: {e}")
+
+        logger.info("▶️ Running bot polling…")
+        bot.app.run_polling()
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
 
 # 👇 הרצה פשוטה ובטוחה - ללא get_event_loop
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
