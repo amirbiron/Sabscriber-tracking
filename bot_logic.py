@@ -1571,27 +1571,13 @@ class SubscriberTrackingBot:
         # Ensure the /start health-check handler is registered exactly once
         self.app.add_handler(CommandHandler("start", self.start))
 
-        logger.info("▶️ Starting bot polling (manual async) …")
+        logger.info("▶️ Starting bot polling via Application.run_polling() …")
 
         try:
-            # For python-telegram-bot v20.x `run_polling` is a **blocking synchronous**
-            # helper that should *not* be awaited inside an async function. Attempting
-            # to do so will raise a `TypeError: object X is not awaitable` and the bot
-            # will silently exit after the initial "Application started" log ✓
-            #
-            # Therefore we start the application *manually* using the fully async
-            # lifecycle methods that ptb exposes: `initialize()`, `start()`, then
-            # `updater.start_polling()` followed by `updater.idle()`. This sequence
-            # keeps the current event-loop alive and makes sure the bot actually
-            # polls Telegram for updates.
-
-            await self.app.initialize()
-            await self.app.start()
-            # `start_polling()` launches the updater task that pulls updates in the
-            # background. It is a coroutine in PTB ≥ 20.x, so we await it here.
-            await self.app.updater.start_polling()
-            # Block until the application is shut down (ctrl-C / SIGTERM on Render)
-            await self.app.updater.idle()
+            # PTB ≥ 21: run_polling is fully awaitable when close_loop=False.
+            # It encapsulates initialization, startup, polling and graceful shutdown,
+            # so we don't need to call `initialize()`, `start()` or the Updater helpers.
+            await self.app.run_polling(close_loop=False)
         except Exception as e:
             logger.exception(f"❌ Unexpected error inside bot: {e}")
 
