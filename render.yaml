@@ -18,4 +18,3 @@ services:
         value: 9
       - key: NOTIFICATION_MINUTE
         value: 0
-    # Note: TELEGRAM_BOT_TOKEN must be set manually in Render dashboard for security
