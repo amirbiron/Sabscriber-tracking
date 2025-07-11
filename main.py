@@ -1,65 +1,67 @@
-#!/usr/bin/env python3
 import os
 import logging
-import requests
-import asyncio
-import nest_asyncio
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# ודא שהייבוא תואם לשמות הקבצים שלך
+from config import Config
 from bot_logic import SubscriberTrackingBot
 
-# הגדרת לוגים
+# הגדרת לוגינג בסיסי
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# patch ללולאות רקע
-nest_asyncio.apply()
-
-# שרת דמה ל-Render
-class DummyHandler(BaseHTTPRequestHandler):
+# --- שרת דמה (Keep-Alive) עבור Render ---
+# Render דורש שהשירות "יאזין" ל-PORT מסוים. שרת זה עונה על הדרישה.
+class KeepAliveHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        """עונה לבקשות GET עם הודעת "חי"."""
         self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b"Bot is alive")
+        self.wfile.write(b"Bot service is alive.")
 
-def run_dummy_server():
-    port = int(os.environ.get("PORT", "10000"))
-    server = HTTPServer(("0.0.0.0", port), DummyHandler)
-    logger.info(f"🌐 Dummy server running on port {port}")
-    server.serve_forever()
+def run_dummy_server(port: int):
+    """מריץ את שרת הדמה בכתובת והפורט הנתונים."""
+    server_address = ('', port)
+    try:
+        httpd = HTTPServer(server_address, KeepAliveHandler)
+        logger.info(f"🌐 Dummy server running on port {port}")
+        httpd.serve_forever()
+    except Exception as e:
+        logger.error(f"💥 Dummy server failed: {e}")
 
-# הפעלת הבוט
-async def start_bot():
+# --- פונקציית הפעלת הבוט ---
+def start_bot():
+    """מאמת את הטוקן ומפעיל את הבוט."""
     logger.info("🚀 Starting Subscriber_tracking Bot...")
-
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if not token:
-        logger.error("❌ TELEGRAM_BOT_TOKEN not found!")
-        return
-
     try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{token}/deleteWebhook?drop_pending_updates=true"
-        )
-        logger.info(f"🔧 Webhook deleted: {response.json()}")
-    except Exception as e:
-        logger.warning(f"⚠️ Couldn't delete webhook: {e}")
+        # 1. קבל את הטוקן ממחלקת התצורה
+        token = Config.validate_token()
 
-    try:
-        bot = SubscriberTrackingBot()
-        logger.info("📡 Bot initialized")
-        await bot.run()
-    except Exception as e:
-        logger.exception(f"❌ Unexpected error inside bot: {e}")
+        # 2. צור את אובייקט הבוט והעבר לו את הטוקן
+        bot = SubscriberTrackingBot(token=token)
+        
+        # 3. הפעל את לולאת הריצה של הבוט
+        bot.run()
 
-# נקודת התחלה
+    except ValueError as e:
+        logger.critical(f"🚨 Configuration error: {e}")
+    except Exception as e:
+        logger.critical(f"❌ A critical error occurred while starting the bot: {e}")
+
+# --- נקודת כניסה ראשית ---
 if __name__ == "__main__":
-    # הפעלת Dummy server בת'רד נפרד
-    threading.Thread(target=run_dummy_server, daemon=True).start()
+    # קבל את הפורט ממשתני הסביבה של Render, עם ברירת מחדל
+    port = int(os.environ.get('PORT', 10000))
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_bot())
-    loop.run_forever()
+    # הרץ את שרת הדמה בתהליכון (thread) נפרד כדי לא לחסום את הבוט
+    server_thread = threading.Thread(target=run_dummy_server, args=(port,))
+    server_thread.daemon = True  # מאפשר לתוכנית להיסגר גם אם התהליכון רץ
+    server_thread.start()
+
+    # הפעל את הבוט בתהליכון הראשי
+    start_bot()
