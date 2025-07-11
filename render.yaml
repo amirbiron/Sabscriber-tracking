@@ -18,3 +18,4 @@ services:
         value: 9
       - key: NOTIFICATION_MINUTE
         value: 0
+      # NOTE: Add TELEGRAM_BOT_TOKEN in Render Dashboard Environment variables
