@@ -37,6 +37,23 @@ async def start_bot():
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"✅ Subscriber_tracking Bot is alive")
+
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8000))  # Render מצפה ל־PORT
+    server = HTTPServer(("0.0.0.0", port), DummyHandler)
+    logger.info(f"🌐 Dummy server running on port {port}")
+    server.serve_forever()
+
+# הרץ את השרת הדמה כ־Thread נפרד
+threading.Thread(target=run_dummy_server, daemon=True).start()
 
 if __name__ == "__main__":
     try:
