@@ -12,6 +12,7 @@ Deployment: Render.com
 import logging
 import sqlite3
 import asyncio
+import signal
 import re
 import os
 from telegram import Bot
