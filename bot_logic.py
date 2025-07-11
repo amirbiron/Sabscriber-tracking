@@ -14,6 +14,7 @@ import sqlite3
 import asyncio
 import re
 import os
+from telegram import Bot
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 import io
@@ -1677,7 +1678,8 @@ class SubscriberTrackingBot:
             message = f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
 
         try:
-            await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
+            bot = Bot(self.token)
+await bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
             logger.info(f" Notification sent successfully to user {user_id}")
         except Exception as e:
             logger.error(f" Failed to send notification to user {user_id}: {e}")
@@ -1700,6 +1702,17 @@ def get_telegram_app():
 
 if __name__ == "__main__":
     import asyncio
-    print(" Starting Subscriber_tracking Bot...")
-    bot = SubscriberTrackingBot()
-    asyncio.run(bot.run())
+
+    async def main():
+        print(" Starting Subscriber_tracking Bot...")
+        bot = SubscriberTrackingBot()
+        await bot.run()
+
+    try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError as e:
+        import sys
+        import traceback
+        print("❌ Unexpected error while starting the bot:")
+        traceback.print_exc()
+        sys.exit(1)
