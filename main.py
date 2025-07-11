@@ -6,6 +6,7 @@
 import os
 import logging
 import requests
+import asyncio
 from bot_logic import SubscriberTrackingBot
 
 # לוגים
@@ -15,8 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def main():
-    """הפעלת הבוט"""
+async def start_bot():
     logger.info("🚀 Starting Subscriber_tracking Bot...")
 
     token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -33,18 +33,19 @@ def main():
     try:
         bot = SubscriberTrackingBot()
         logger.info("📡 Bot initialized")
-
-        # Run bot inside asyncio event loop so that scheduler can start safely
-        import asyncio
-
-        async def _run_bot():
-            await bot.run()
-
-        asyncio.run(_run_bot())
+        await bot.run()
     except Exception as e:
         logger.error(f"❌ Unexpected error: {e}")
         raise
 
-# 👇 הרצה פשוטה ובטוחה - ללא get_event_loop
 if __name__ == "__main__":
-    main()
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            logger.warning("⚠️ Event loop is already running. Using create_task and run_forever()...")
+            loop.create_task(start_bot())
+            loop.run_forever()
+        else:
+            loop.run_until_complete(start_bot())
+    except RuntimeError:
+        asyncio.run(start_bot())
