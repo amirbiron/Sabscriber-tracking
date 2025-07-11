@@ -328,7 +328,7 @@ class SubscriberTrackingBot:
         else:
             for days, sub in upcoming_subs:
                 when = "היום" if days == 0 else "מחר" if days == 1 else f"בעוד {days} ימים"
-                text += f"\n- **{when} ({sub['billing_day'] לחודש}):** {sub['service_name']} - {sub['amount']:.2f} {sub['currency']}"
+                text += f"\n- **{when} ({sub['billing_day']} לחודש):** {sub['service_name']} - {sub['amount']:.2f} {sub['currency']}"
 
         await update.message.reply_text(text)
 
