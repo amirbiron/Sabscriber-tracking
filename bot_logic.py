@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERROR#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
  Subscriber_tracking Bot
@@ -1628,60 +1628,62 @@ class SubscriberTrackingBot:
         else:
             logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
         
-        async def check_and_send_notifications(self):
-            """בדיקה ושליחת התראות יומית"""
-            try:
-                logger.info(" Checking for notifications to send...")
-                conn = sqlite3.connect("database.db")
-                cursor = conn.cursor()
-                today = datetime.now().date()
+        # סיום מתודת run
 
-                cursor.execute('''
-                    SELECT n.id, n.subscription_id, n.notification_type, s.user_id, 
-                           s.service_name, s.amount, s.currency
-                    FROM notifications n
-                    JOIN subscriptions s ON n.subscription_id = s.id
-                    WHERE n.notification_date = ? AND n.sent = 0 AND s.is_active = 1
-                ''', (today,))
+    async def check_and_send_notifications(self):
+        """בדיקה ושליחת התראות יומית"""
+        try:
+            logger.info(" Checking for notifications to send...")
+            conn = sqlite3.connect("database.db")
+            cursor = conn.cursor()
+            today = datetime.now().date()
 
-                notifications = cursor.fetchall()
-                if notifications:
-                    logger.info(f" Found {len(notifications)} notifications to send")
+            cursor.execute('''
+                SELECT n.id, n.subscription_id, n.notification_type, s.user_id, 
+                       s.service_name, s.amount, s.currency
+                FROM notifications n
+                JOIN subscriptions s ON n.subscription_id = s.id
+                WHERE n.notification_date = ? AND n.sent = 0 AND s.is_active = 1
+            ''', (today,))
 
-                for n in notifications:
-                    notif_id, _, notif_type, user_id, name, amount, currency = n
-                    await self.send_notification(user_id, {
-                        'service_name': name,
-                        'amount': amount,
-                        'currency': currency
-                    }, notif_type)
-                    cursor.execute('UPDATE notifications SET sent = 1 WHERE id = ?', (notif_id,))
-                    logger.info(f" Notification sent to user {user_id} for {name}")
+            notifications = cursor.fetchall()
+            if notifications:
+                logger.info(f" Found {len(notifications)} notifications to send")
 
-                conn.commit()
-                conn.close()
+            for n in notifications:
+                notif_id, _, notif_type, user_id, name, amount, currency = n
+                await self.send_notification(user_id, {
+                    'service_name': name,
+                    'amount': amount,
+                    'currency': currency
+                }, notif_type)
+                cursor.execute('UPDATE notifications SET sent = 1 WHERE id = ?', (notif_id,))
+                logger.info(f" Notification sent to user {user_id} for {name}")
 
-                if not notifications:
-                    logger.info(" No notifications to send today")
+            conn.commit()
+            conn.close()
 
-            except Exception as e:
-                logger.error(f" Error in notification check: {e}")
+            if not notifications:
+                logger.info(" No notifications to send today")
 
-        async def send_notification(self, user_id: int, subscription_data: dict, notification_type: str):
-            name = subscription_data['service_name']
-            amount = subscription_data['amount']
-            currency = subscription_data['currency']
+        except Exception as e:
+            logger.error(f" Error in notification check: {e}")
 
-            if notification_type == 'week_before':
-                message = f" תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n סכום: {amount} {currency}"
-            elif notification_type == 'day_before':
-                message = f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
+    async def send_notification(self, user_id: int, subscription_data: dict, notification_type: str):
+        name = subscription_data['service_name']
+        amount = subscription_data['amount']
+        currency = subscription_data['currency']
 
-            try:
-                await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
-                logger.info(f" Notification sent successfully to user {user_id}")
-            except Exception as e:
-                logger.error(f" Failed to send notification to user {user_id}: {e}")
+        if notification_type == 'week_before':
+            message = f" תזכורת שבועית: המנוי ל-{name} יתחדש בעוד שבוע!\n סכום: {amount} {currency}"
+        elif notification_type == 'day_before':
+            message = f" תזכורת: מחר יחויבו {amount} {currency} עבור {name}!"
+
+        try:
+            await self.app.bot.send_message(chat_id=user_id, text=message, parse_mode='Markdown')
+            logger.info(f" Notification sent successfully to user {user_id}")
+        except Exception as e:
+            logger.error(f" Failed to send notification to user {user_id}: {e}")
 
 # טיפול בסיגנלים ל־Render
 def signal_handler(sig, frame):
