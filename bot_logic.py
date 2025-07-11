@@ -1628,6 +1628,8 @@ class SubscriberTrackingBot:
         except Exception as shutdown_error:
             logger.warning(f"⚠️ Failed during shutdown: {shutdown_error}")
         logger.error(f"❌ Bot polling failed: {e}")
+else:
+    logger.error("❌ self.app is None – לא ניתן להפעיל את הבוט")
         
         # סיום מתודת run
 
