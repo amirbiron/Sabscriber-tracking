@@ -23,7 +23,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"✅ Subscriber_tracking Bot is alive")
+        self.wfile.write(b"Bot is alive")
 
 def run_dummy_server():
     port = int(os.environ.get("PORT", "10000"))
