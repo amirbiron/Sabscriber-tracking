@@ -5,3 +5,4 @@ python-dotenv>=1.0.0
 Pillow>=10.0.0
 pytesseract>=0.3.10
 nest_asyncio>=1.5.8
+standard-imghdr>=3.13.0
