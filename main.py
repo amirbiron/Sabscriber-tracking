@@ -53,10 +53,6 @@ async def start_bot():
         logger.info("📡 Bot initialized")
         await bot.run()
 
-        # מניעת יציאה מוקדמת מהלולאה
-        while True:
-            await asyncio.sleep(60)
-
     except Exception as e:
         logger.exception(f"❌ Unexpected error inside bot: {e}")
 
