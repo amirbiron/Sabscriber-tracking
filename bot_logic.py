@@ -21,7 +21,7 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from config import Config
-from db_manager import DatabaseManager # Assuming you have this file from earlier
+from db_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,14 @@ class SubscriberTrackingBot:
         self.db.init_database()
         self.setup_handlers()
 
-    # --- NEW ASYNC RUN/STOP METHODS ---
+    # --- NEW ASYNC RUN/STOP METHODS (Corrected Order) ---
     async def run_async(self):
         """מפעיל את הבוט באופן אסינכרוני ולא חוסם."""
         await self.app.initialize()
+        await self.app.start()  # <-- Step 1: Start the application
         if self.app.updater:
-            await self.app.updater.start_polling()
-        await self.app.start()
+            await self.app.updater.start_polling() # <-- Step 2: Start polling for updates
+        
         if self.scheduler.running:
              logger.info("Scheduler is already running.")
         else:
@@ -89,8 +90,12 @@ class SubscriberTrackingBot:
         self.app.add_handler(CommandHandler("export", self.export_data_command))
         self.app.add_handler(MessageHandler(filters.Regex(r'^/delete_(\d+)$'), self.delete_subscription_command))
         
-        if Config.ENABLE_OCR:
-            self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot_ocr))
+        # Note: 'Config.ENABLE_OCR' was not defined in the provided config.py.
+        # You might need to add `ENABLE_OCR = os.getenv('ENABLE_OCR', 'false').lower() == 'true'`
+        # to your config.py if you want to use this feature.
+        # For now, I've commented it out to prevent errors.
+        # if Config.ENABLE_OCR and OCR_AVAILABLE:
+        #     self.app.add_handler(MessageHandler(filters.PHOTO, self.handle_screenshot_ocr))
         
         self.app.add_handler(CallbackQueryHandler(self.button_callback))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_unknown_text))
@@ -129,8 +134,8 @@ class SubscriberTrackingBot:
             await update.message.reply_text("לא מצאתי מנויים רשומים. הוסף אחד עם /add_subscription")
             return
 
-        total_monthly = sum(sub['amount'] for sub in subscriptions)
-        header = f"📄 **הנה המנויים שלך ({len(subscriptions)}):**\n\n**סה\"כ הוצאה חודשית:** {total_monthly:.2f} ₪\n"
+        total_monthly = sum(sub['amount'] for sub in subscriptions if sub['currency'] == 'ILS')
+        header = f"📄 **הנה המנויים שלך ({len(subscriptions)}):**\n\n**סה\"כ הוצאה חודשית (ב-ILS):** {total_monthly:.2f} ₪\n"
         
         subs_text = ""
         for sub in subscriptions:
@@ -190,7 +195,8 @@ class SubscriberTrackingBot:
         await update.message.reply_text(text)
 
     async def export_data_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # Implementation for export_data_command
+        # This command is not fully implemented in the provided code
+        await update.message.reply_text("פיצ'ר הייצוא יפותח בהמשך.")
         pass
 
     # --- Add Subscription Conversation ---
