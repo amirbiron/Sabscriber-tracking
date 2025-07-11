@@ -306,8 +306,8 @@ class SubscriberTrackingBot:
         await update.message.reply_text("תודה שפנית אליי!")
 
     async def help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """עטיפה עבור help_command כדי להשאיר תאימות לפקודת /help."""
-        await self.help_command(update, context)
+        """Temporary /help command response (placeholder)."""
+        await update.message.reply_text("ℹ️ לעזרה זמנית: תיעוד מפורט יתווסף בהמשך.")
 
     def ensure_user_settings(self, user_id: int):
         """וידוא שקיימות הגדרות למשתמש"""
