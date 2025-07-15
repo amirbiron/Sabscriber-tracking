@@ -106,7 +106,6 @@ async def received_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     currency_code = query.data.split('_')[1]
     
     subscription_data = {
-        # **התיקון כאן**
         "chat_id": update.effective_chat.id,
         "service_name": context.user_data['name'],
         "billing_day": context.user_data['day'],
@@ -134,7 +133,6 @@ async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    # **התיקון כאן**
     user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     
     if not user_subs:
@@ -159,7 +157,6 @@ async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def delete_sub_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    # **התיקון כאן**
     user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     if not user_subs:
         await query.edit_message_text("אין לך מנויים למחוק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
@@ -178,6 +175,11 @@ async def delete_sub_confirm_callback(update: Update, context: ContextTypes.DEFA
     subscriptions_collection.delete_one({"_id": ObjectId(sub_id_str)})
     
     await query.edit_message_text("המנוי נמחק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה לתפריט הראשי", callback_data="main_menu")]]))
+
+# --- הוספת הפונקציה החסרה ---
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error."""
+    logger.error("Exception while handling an update:", exc_info=context.error)
 
 # --- משימה מתוזמנת ---
 async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -212,6 +214,7 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
     
+    # הגדרת שיחת הוספת המנוי
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(add_sub_start, pattern="^add_sub_start$")],
         states={
@@ -221,8 +224,8 @@ def main() -> None:
             CURRENCY: [CallbackQueryHandler(received_currency, pattern="^currency_")],
         },
         fallbacks=[CommandHandler("cancel", cancel_conv)],
-        conversation_timeout=300,
-        per_message=False
+        conversation_timeout=300
+        # הסרנו את per_message=False כדי למנוע את האזהרה
     )
     
     application.add_error_handler(error_handler)
