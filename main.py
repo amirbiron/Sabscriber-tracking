@@ -47,9 +47,6 @@ def get_main_menu():
 
 # --- פונקציות הבוט ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_collection = db.get_collection("users")
-    user_collection.update_one({"chat_id": update.effective_chat.id}, {"$set": {"username": update.effective_user.username}}, upsert=True)
-    
     await update.message.reply_text(
         "שלום! אני בוט שיעזור לך לעקוב אחר המנויים החודשיים שלך.\n"
         "אני אשלח לך תזכורת 4 ימים לפני כל חיוב.\n\n"
@@ -78,7 +75,6 @@ async def received_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         day = int(update.message.text)
         if not 1 <= day <= 31: raise ValueError()
         context.user_data['day'] = day
-        # **תיקון הטקסט כאן**
         await update.message.reply_text("מעולה. מה העלות החודשית?")
         return COST
     except ValueError:
@@ -110,7 +106,8 @@ async def received_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     currency_code = query.data.split('_')[1]
     
     subscription_data = {
-        "chat_id": query.effective_chat.id,
+        # **התיקון כאן**
+        "chat_id": update.effective_chat.id,
         "service_name": context.user_data['name'],
         "billing_day": context.user_data['day'],
         "cost": context.user_data['cost'],
@@ -121,7 +118,7 @@ async def received_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.edit_message_text(f"המנוי '{context.user_data['name']}' נוסף בהצלחה!")
     
     context.user_data.clear()
-    await context.bot.send_message(chat_id=query.effective_chat.id, text="תפריט ראשי:", reply_markup=get_main_menu())
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="תפריט ראשי:", reply_markup=get_main_menu())
     return ConversationHandler.END
 
 async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -130,15 +127,15 @@ async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.callback_query.answer()
         await update.callback_query.edit_message_text("הפעולה בוטלה.", reply_markup=get_main_menu())
     else:
-        await update.message.reply_text("הפעולה בוטלה.", reply_markup=get_main_menu())
+        await update.message.reply_text("הפעולה בוטלה.")
     context.user_data.clear()
     return ConversationHandler.END
-
 
 async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    user_subs = list(subscriptions_collection.find({"chat_id": query.effective_chat.id}))
+    # **התיקון כאן**
+    user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     
     if not user_subs:
         await query.edit_message_text("לא רשומים לך מנויים.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
@@ -146,7 +143,7 @@ async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     message = "אלו המנויים הרשומים שלך:\n\n"
     total_costs = {}
-    for sub in subs_list:
+    for sub in user_subs:
         currency = sub.get('currency', '')
         cost = sub.get('cost', 0)
         message += f"- **{sub['service_name']}** (חיוב ב-{sub['billing_day']} לחודש, עלות: {cost} {currency})\n"
@@ -162,7 +159,8 @@ async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def delete_sub_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    user_subs = list(subscriptions_collection.find({"chat_id": query.effective_chat.id}))
+    # **התיקון כאן**
+    user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     if not user_subs:
         await query.edit_message_text("אין לך מנויים למחוק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
         return
@@ -174,11 +172,12 @@ async def delete_sub_menu_callback(update: Update, context: ContextTypes.DEFAULT
 
 async def delete_sub_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
     sub_id_str = query.data.split('_')[1]
     
     subscriptions_collection.delete_one({"_id": ObjectId(sub_id_str)})
-    await query.answer("המנוי נמחק!")
-    await main_menu_callback(update, text="המנוי נמחק. תפריט ראשי:")
+    
+    await query.edit_message_text("המנוי נמחק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה לתפריט הראשי", callback_data="main_menu")]]))
 
 # --- משימה מתוזמנת ---
 async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -189,8 +188,17 @@ async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
     subs_due = subscriptions_collection.find({"billing_day": reminder_day})
     
     for sub in subs_due:
-        # ... logic to send reminder ...
-        pass
+        currency = sub.get('currency', '')
+        cost = sub.get('cost', '')
+        message = (
+            f"🔔 **תזכורת תשלום** 🔔\n\n"
+            f"בעוד 4 ימים, בתאריך {reminder_date.strftime('%d/%m')}, יתבצע חיוב עבור המנוי שלך ל-**{sub['service_name']}** "
+            f"בסך **{cost} {currency}**."
+        )
+        try:
+            await context.bot.send_message(chat_id=sub['chat_id'], text=message, parse_mode='Markdown')
+        except Exception as e:
+            logger.error(f"Failed to send reminder to {sub['chat_id']}: {e}")
 
 # --- פונקציה ראשית ---
 def main() -> None:
@@ -204,7 +212,6 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
     
-    # הגדרת שיחת הוספת המנוי
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(add_sub_start, pattern="^add_sub_start$")],
         states={
@@ -215,10 +222,10 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel_conv)],
         conversation_timeout=300,
-        # **התיקון כאן**: הגדרה זו עוזרת בניהול שיחות מורכבות
         per_message=False
     )
     
+    application.add_error_handler(error_handler)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(my_subs_callback, pattern="^my_subs$"))
