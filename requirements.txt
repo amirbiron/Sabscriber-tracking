@@ -1,6 +1,2 @@
-python-telegram-bot==20.8
-apscheduler
-pillow
-pytesseract
-python-dotenv
-aiohttp
+python-telegram-bot[job-queue]
+pymongo[srv]
