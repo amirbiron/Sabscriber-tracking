@@ -1,21 +1,14 @@
 services:
-  - type: worker
-    name: subscriber-tracking-bot
+  - type: web
+    name: subscription-reminder-bot
     env: python
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11
-      - key: DATABASE_PATH
-        value: /tmp/subscriber_tracking.db
-      - key: ENABLE_OCR
-        value: false
-      - key: ENABLE_ANALYTICS
-        value: true
-      - key: NOTIFICATION_HOUR
-        value: 9
-      - key: NOTIFICATION_MINUTE
-        value: 0
-      # NOTE: Add TELEGRAM_BOT_TOKEN in Render Dashboard Environment variables
+        value: 3.11.9
+      - key: BOT_TOKEN
+        sync: false
+      - key: MONGO_URI # משתנה סביבה חדש וחיוני
+        sync: false
