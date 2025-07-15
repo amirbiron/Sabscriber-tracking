@@ -1,12 +1,14 @@
 import logging
 import os
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler, CallbackQueryHandler
 import http.server
 import socketserver
 import threading
 from datetime import datetime, time, timedelta
 import pymongo
+import re
+from bson.objectid import ObjectId
 
 # --- הגדרות בסיסיות ---
 logging.basicConfig(
@@ -25,7 +27,7 @@ db = client.get_database("SubscriptionBotDB")
 subscriptions_collection = db.get_collection("subscriptions")
 
 # --- הגדרת שלבים לשיחה (Conversation) ---
-NAME, DAY, COST = range(3)
+NAME, DAY, COST, CURRENCY = range(4)
 
 # --- שרת Keep-Alive ---
 def run_keep_alive_server():
@@ -34,86 +36,150 @@ def run_keep_alive_server():
         logger.info(f"Keep-alive server started on port {PORT}")
         httpd.serve_forever()
 
+# --- פונקציות תפריטים ---
+def get_main_menu():
+    keyboard = [
+        [InlineKeyboardButton("➕ הוספת מנוי חדש", callback_data="add_sub_start")],
+        [InlineKeyboardButton("📋 הצגת המנויים שלי", callback_data="my_subs")],
+        [InlineKeyboardButton("➖ מחיקת מנוי", callback_data="delete_sub_menu")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 # --- פונקציות הבוט ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "שלום! אני בוט שיעזור לך לעקוב אחר המנויים החודשיים שלך.\n"
         "אני אשלח לך תזכורת 4 ימים לפני כל חיוב.\n\n"
-        "השתמש בפקודות הבאות:\n"
-        "/add - להוספת מנוי חדש\n"
-        "/mysubs - להצגת כל המנויים שלך\n"
-        "/delete - למחיקת מנוי (בקרוב!)"
+        "השתמש בתפריט הכפתורים כדי להתחיל:",
+        reply_markup=get_main_menu()
     )
 
-async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """מתחיל את תהליך הוספת המנוי."""
-    await update.message.reply_text("בוא נוסיף מנוי חדש. מה שם השירות? (למשל, ChatGPT)")
+async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows the main menu."""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("תפריט ראשי:", reply_markup=get_main_menu())
+
+async def add_sub_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Starts the add subscription conversation."""
+    query = update.callback_query
+    await query.answer()
+    # Send a new message to start the text-based conversation
+    await query.message.reply_text("בוא נוסיף מנוי חדש. מה שם השירות? (למשל, ChatGPT)")
     return NAME
 
 async def received_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """מקבל את שם המנוי ומבקש את יום החיוב."""
     context.user_data['name'] = update.message.text
     await update.message.reply_text("מצוין. באיזה יום בחודש מתבצע החיוב? (מספר בין 1 ל-31)")
     return DAY
 
 async def received_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """מקבל את יום החיוב ומבקש את העלות."""
     try:
         day = int(update.message.text)
-        if not 1 <= day <= 31:
-            raise ValueError()
+        if not 1 <= day <= 31: raise ValueError()
         context.user_data['day'] = day
-        await update.message.reply_text("מעולה. מה העלות החודשית? (רשום רק מספר, למשל 20)")
+        await update.message.reply_text("מעולה. מה העלות החודשית? (אפשר לרשום גם סמל מטבע)")
         return COST
     except ValueError:
         await update.message.reply_text("זה לא נראה כמו יום תקין בחודש. אנא שלח מספר בין 1 ל-31.")
         return DAY
 
 async def received_cost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """מקבל את העלות, שומר את המנוי, ומסיים את השיחה."""
     try:
-        cost = float(update.message.text)
-        
-        subscription_data = {
-            "chat_id": update.effective_chat.id,
-            "service_name": context.user_data['name'],
-            "billing_day": context.user_data['day'],
-            "cost": cost,
-        }
-        subscriptions_collection.insert_one(subscription_data)
-        
-        await update.message.reply_text(f"המנוי '{context.user_data['name']}' נוסף בהצלחה!")
-        
-    except ValueError:
-        await update.message.reply_text("זה לא נראה כמו מספר. אנא שלח רק את סכום העלות.")
-        return COST # נשארים באותו שלב כדי לנסות שוב
+        cost_text = re.sub(r'[^\d.]', '', update.message.text)
+        cost = float(cost_text)
+        context.user_data['cost'] = cost
+
+        # New step: ask for currency
+        keyboard = [
+            [
+                InlineKeyboardButton("₪ ILS", callback_data="currency_ILS"),
+                InlineKeyboardButton("$ USD", callback_data="currency_USD"),
+                InlineKeyboardButton("€ EUR", callback_data="currency_EUR"),
+            ]
+        ]
+        await update.message.reply_text("באיזה מטבע החיוב?", reply_markup=InlineKeyboardMarkup(keyboard))
+        return CURRENCY
+    except (ValueError, TypeError):
+        await update.message.reply_text("לא הצלחתי להבין את הסכום. אנא שלח רק מספר.")
+        return COST
+
+async def received_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Saves the currency and finalizes the subscription."""
+    query = update.callback_query
+    await query.answer()
+    
+    currency_symbol_map = {"ILS": "₪", "USD": "$", "EUR": "€"}
+    currency = query.data.split('_')[1]
+    context.user_data['currency'] = currency_symbol_map.get(currency, currency)
+
+    subscription_data = {
+        "chat_id": query.effective_chat.id,
+        "service_name": context.user_data['name'],
+        "billing_day": context.user_data['day'],
+        "cost": context.user_data['cost'],
+        "currency": context.user_data['currency']
+    }
+    subscriptions_collection.insert_one(subscription_data)
+    
+    await query.edit_message_text(f"המנוי '{context.user_data['name']}' נוסף בהצלחה!")
     
     context.user_data.clear()
-    return ConversationHandler.END # מסיימים את השיחה
+    await context.bot.send_message(chat_id=query.effective_chat.id, text="תפריט ראשי:", reply_markup=get_main_menu())
+    return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """מבטל את תהליך ההוספה."""
+
+async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("הפעולה בוטלה.")
+    await update.message.reply_text("תפריט ראשי:", reply_markup=get_main_menu())
     context.user_data.clear()
     return ConversationHandler.END
 
-async def my_subs_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """מציג למשתמש את כל המנויים הרשומים שלו."""
-    user_subs = subscriptions_collection.find({"chat_id": update.effective_chat.id})
-    subs_list = list(user_subs)
+async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    user_subs = list(subscriptions_collection.find({"chat_id": query.effective_chat.id}))
     
-    if not subs_list:
-        await update.message.reply_text("לא רשומים לך מנויים כרגע. השתמש ב- /add כדי להוסיף.")
+    if not user_subs:
+        await query.edit_message_text("לא רשומים לך מנויים.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
         return
 
     message = "אלו המנויים הרשומים שלך:\n\n"
-    total_cost = 0
+    total_costs = {}
     for sub in subs_list:
-        message += f"- **{sub['service_name']}**\n  חיוב ב-{sub['billing_day']} לחודש, עלות: {sub['cost']}\n"
-        total_cost += sub['cost']
+        currency = sub.get('currency', '')
+        cost = sub.get('cost', 0)
+        message += f"- **{sub['service_name']}** (חיוב ב-{sub['billing_day']} לחודש, עלות: {cost} {currency})\n"
+        if currency not in total_costs:
+            total_costs[currency] = 0
+        total_costs[currency] += cost
         
-    message += f"\n**סה\"כ עלות חודשית: {total_cost}**"
-    await update.message.reply_text(message, parse_mode='Markdown')
+    message += "\n**סה\"כ עלות חודשית:**"
+    for currency, total in total_costs.items():
+        message += f"\n- {total} {currency}"
+        
+    await query.edit_message_text(message, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
+
+async def delete_sub_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_subs = list(subscriptions_collection.find({"chat_id": query.effective_chat.id}))
+    if not user_subs:
+        await query.edit_message_text("אין לך מנויים למחוק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")]]))
+        return
+        
+    keyboard = [[InlineKeyboardButton(f"❌ {sub['service_name']}", callback_data=f"delete_{sub['_id']}")] for sub in user_subs]
+    keyboard.append([InlineKeyboardButton("🔙 חזרה", callback_data="main_menu")])
+    
+    await query.edit_message_text("בחר מנוי למחיקה:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def delete_sub_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    sub_id_str = query.data.split('_')[1]
+    
+    subscriptions_collection.delete_one({"_id": ObjectId(sub_id_str)})
+    await query.answer("המנוי נמחק!")
+    await main_menu_callback(update, text="המנוי נמחק. תפריט ראשי:")
 
 # --- משימה מתוזמנת ---
 async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -124,10 +190,12 @@ async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
     subs_due = subscriptions_collection.find({"billing_day": reminder_day})
     
     for sub in subs_due:
+        currency = sub.get('currency', '')
+        cost = sub.get('cost', '')
         message = (
             f"🔔 **תזכורת תשלום** 🔔\n\n"
             f"בעוד 4 ימים, בתאריך {reminder_date.strftime('%d/%m')}, יתבצע חיוב עבור המנוי שלך ל-**{sub['service_name']}** "
-            f"בסך **{sub['cost']}**."
+            f"בסך **{cost} {currency}**."
         )
         try:
             await context.bot.send_message(chat_id=sub['chat_id'], text=message, parse_mode='Markdown')
@@ -146,22 +214,25 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
     
-    # הגדרת שיחת הוספת המנוי עם timeout ארוך יותר
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("add", add_command)],
+        entry_points=[CallbackQueryHandler(add_sub_start, pattern="^add_sub_start$")],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_name)],
             DAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_day)],
             COST: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_cost)],
+            CURRENCY: [CallbackQueryHandler(received_currency, pattern="^currency_")],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        conversation_timeout=300 # **השינוי כאן: 5 דקות**
+        fallbacks=[CommandHandler("cancel", cancel_conv)],
+        conversation_timeout=300
     )
     
-    application.add_handler(conv_handler)
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("mysubs", my_subs_command))
-    
+    application.add_handler(conv_handler)
+    application.add_handler(CallbackQueryHandler(my_subs_callback, pattern="^my_subs$"))
+    application.add_handler(CallbackQueryHandler(delete_sub_menu_callback, pattern="^delete_sub_menu$"))
+    application.add_handler(CallbackQueryHandler(delete_sub_confirm_callback, pattern="^delete_"))
+    application.add_handler(CallbackQueryHandler(lambda u, c: main_menu_callback(u, c), pattern="^main_menu$"))
+
     application.job_queue.run_daily(daily_check, time=time(hour=9, minute=0))
     
     logger.info("Bot starting with Polling...")
