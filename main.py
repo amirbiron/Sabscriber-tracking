@@ -25,6 +25,7 @@ PORT = int(os.environ.get("PORT", 8080))
 client = pymongo.MongoClient(MONGO_URI)
 db = client.get_database("SubscriptionBotDB")
 subscriptions_collection = db.get_collection("subscriptions")
+users_collection = db.get_collection("users") # אוסף חדש עבור המשתמשים
 
 # --- הגדרת שלבים לשיחה (Conversation) ---
 NAME, DAY, COST, CURRENCY = range(4)
@@ -47,6 +48,16 @@ def get_main_menu():
 
 # --- פונקציות הבוט ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # **השינוי כאן: שמירת פרטי המשתמש**
+    user_info = {
+        "chat_id": update.effective_chat.id,
+        "first_name": update.effective_user.first_name,
+        "username": update.effective_user.username,
+        "first_seen": datetime.now()
+    }
+    # update_one עם upsert=True יצור את המשתמש אם הוא לא קיים, או יעדכן את פרטיו אם הוא קיים
+    users_collection.update_one({"chat_id": update.effective_chat.id}, {"$set": user_info, "$setOnInsert": {"first_seen": datetime.now()}}, upsert=True)
+    
     await update.message.reply_text(
         "שלום! אני בוט שיעזור לך לעקוב אחר המנויים החודשיים שלך.\n"
         "אני אשלח לך תזכורת 4 ימים לפני כל חיוב.\n\n"
@@ -54,6 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=get_main_menu()
     )
 
+# ... (שאר הפונקציות נשארות זהות) ...
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -121,7 +133,6 @@ async def received_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return ConversationHandler.END
 
 async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Check if it's a callback query (from a button) or a message
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text("הפעולה בוטלה.", reply_markup=get_main_menu())
@@ -176,12 +187,9 @@ async def delete_sub_confirm_callback(update: Update, context: ContextTypes.DEFA
     
     await query.edit_message_text("המנוי נמחק.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 חזרה לתפריט הראשי", callback_data="main_menu")]]))
 
-# --- הוספת הפונקציה החסרה ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the error."""
     logger.error("Exception while handling an update:", exc_info=context.error)
 
-# --- משימה מתוזמנת ---
 async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("Running daily subscription check...")
     reminder_date = datetime.now() + timedelta(days=4)
@@ -192,17 +200,12 @@ async def daily_check(context: ContextTypes.DEFAULT_TYPE) -> None:
     for sub in subs_due:
         currency = sub.get('currency', '')
         cost = sub.get('cost', '')
-        message = (
-            f"🔔 **תזכורת תשלום** 🔔\n\n"
-            f"בעוד 4 ימים, בתאריך {reminder_date.strftime('%d/%m')}, יתבצע חיוב עבור המנוי שלך ל-**{sub['service_name']}** "
-            f"בסך **{cost} {currency}**."
-        )
+        message = f"🔔 **תזכורת תשלום** 🔔\n\nבעוד 4 ימים, בתאריך {reminder_date.strftime('%d/%m')}, יתבצע חיוב עבור המנוי שלך ל-**{sub['service_name']}** בסך **{cost} {currency}**."
         try:
             await context.bot.send_message(chat_id=sub['chat_id'], text=message, parse_mode='Markdown')
         except Exception as e:
             logger.error(f"Failed to send reminder to {sub['chat_id']}: {e}")
 
-# --- פונקציה ראשית ---
 def main() -> None:
     if not TOKEN or not MONGO_URI:
         logger.fatal("FATAL: BOT_TOKEN or MONGO_URI environment variables are missing!")
@@ -214,7 +217,6 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
     
-    # הגדרת שיחת הוספת המנוי
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(add_sub_start, pattern="^add_sub_start$")],
         states={
@@ -225,7 +227,6 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel_conv)],
         conversation_timeout=300
-        # הסרנו את per_message=False כדי למנוע את האזהרה
     )
     
     application.add_error_handler(error_handler)
