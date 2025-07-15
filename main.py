@@ -25,7 +25,7 @@ PORT = int(os.environ.get("PORT", 8080))
 client = pymongo.MongoClient(MONGO_URI)
 db = client.get_database("SubscriptionBotDB")
 subscriptions_collection = db.get_collection("subscriptions")
-users_collection = db.get_collection("users") # אוסף חדש עבור המשתמשים
+users_collection = db.get_collection("users")
 
 # --- הגדרת שלבים לשיחה (Conversation) ---
 NAME, DAY, COST, CURRENCY = range(4)
@@ -36,6 +36,25 @@ def run_keep_alive_server():
     with socketserver.TCPServer(("", PORT), handler) as httpd:
         logger.info(f"Keep-alive server started on port {PORT}")
         httpd.serve_forever()
+
+# --- פונקציית עזר לשמירת משתמש ---
+async def ensure_user_in_db(update: Update):
+    """בודקת אם המשתמש קיים ב-DB ומוסיפה אותו אם לא."""
+    user = update.effective_user
+    if not user:
+        return
+
+    user_info = {
+        "chat_id": user.id,
+        "first_name": user.first_name,
+        "username": user.username,
+    }
+    # $setOnInsert יקבע את התאריך רק כשהמשתמש נוצר לראשונה
+    users_collection.update_one(
+        {"chat_id": user.id},
+        {"$set": user_info, "$setOnInsert": {"first_seen": datetime.now()}},
+        upsert=True
+    )
 
 # --- פונקציות תפריטים ---
 def get_main_menu():
@@ -48,16 +67,7 @@ def get_main_menu():
 
 # --- פונקציות הבוט ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # **השינוי כאן: שמירת פרטי המשתמש**
-    user_info = {
-        "chat_id": update.effective_chat.id,
-        "first_name": update.effective_user.first_name,
-        "username": update.effective_user.username,
-        "first_seen": datetime.now()
-    }
-    # update_one עם upsert=True יצור את המשתמש אם הוא לא קיים, או יעדכן את פרטיו אם הוא קיים
-    users_collection.update_one({"chat_id": update.effective_chat.id}, {"$set": user_info, "$setOnInsert": {"first_seen": datetime.now()}}, upsert=True)
-    
+    await ensure_user_in_db(update) # בדיקת משתמש
     await update.message.reply_text(
         "שלום! אני בוט שיעזור לך לעקוב אחר המנויים החודשיים שלך.\n"
         "אני אשלח לך תזכורת 4 ימים לפני כל חיוב.\n\n"
@@ -65,14 +75,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=get_main_menu()
     )
 
-# ... (שאר הפונקציות נשארות זהות) ...
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await ensure_user_in_db(update) # בדיקת משתמש
     await query.answer()
     await query.edit_message_text("תפריט ראשי:", reply_markup=get_main_menu())
 
 async def add_sub_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
+    await ensure_user_in_db(update) # בדיקת משתמש
     await query.answer()
     await query.edit_message_text("בוא נוסיף מנוי חדש. מה שם השירות? (למשל, ChatGPT)")
     return NAME
@@ -143,6 +154,7 @@ async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+    await ensure_user_in_db(update) # בדיקת משתמש
     await query.answer()
     user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     
@@ -167,6 +179,7 @@ async def my_subs_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def delete_sub_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await ensure_user_in_db(update) # בדיקת משתמש
     await query.answer()
     user_subs = list(subscriptions_collection.find({"chat_id": update.effective_chat.id}))
     if not user_subs:
